@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis';
 import type { Popup, PopupField, Submission, PublicPopupConfig } from './types';
+import { normalizeTrigger } from './popup-shape';
 
 let _redis: Redis | null = null;
 
@@ -112,6 +113,7 @@ export function toPublicConfig(popup: Popup): PublicPopupConfig {
     buttonText: popup.buttonText,
     imageUrl: popup.imageUrl,
     fields: popup.fields,
+    trigger: popup.trigger,
     thankYouUrl: popup.thankYouUrl,
     style: popup.style,
   };

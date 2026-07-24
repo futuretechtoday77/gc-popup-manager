@@ -3,6 +3,7 @@ import type {
   PopupField,
   PopupStyle,
   PopupTemplate,
+  PopupTrigger,
   FieldKey,
 } from './types';
 import { DEFAULT_FIELDS } from './types';
@@ -11,6 +12,15 @@ import { nowIso } from './id';
 
 const FIELD_KEYS: FieldKey[] = ['firstName', 'phone', 'notes'];
 const TEMPLATES: PopupTemplate[] = ['classic', 'minimal', 'slideup', 'split'];
+
+const MAX_DELAY_SECONDS = 86400;
+export function normalizeTrigger(v: unknown, popupId: string): PopupTrigger {
+  const t = (v || {}) as Record<string, unknown>;
+  const type = t.type === 'delay' || t.type === 'exitIntent' ? t.type : 'button';
+  const n = Number(t.delaySeconds);
+  return { type, delaySeconds: Number.isFinite(n) ? Math.max(1, Math.min(MAX_DELAY_SECONDS, Math.round(n))) : 30, buttonSelector: sanitize(t.buttonSelector, 500) || `[data-gc-popup-trigger="${popupId}"]`, showOncePerSession: boolField(t.showOncePerSession, true) };
+}
+
 
 function boolField(v: unknown, def = false): boolean {
   if (typeof v === 'boolean') return v;
@@ -119,6 +129,7 @@ export function buildNewPopup(input: Record<string, unknown>): Popup {
     buttonText: sanitize(input.buttonText, 100) || 'Submit',
     imageUrl: sanitize(input.imageUrl, 2000),
     fields: normFields(input.fields),
+    trigger: normalizeTrigger(input.trigger, id),
     gcTagId: sanitize(input.gcTagId, 200),
     thankYouUrl: sanitize(input.thankYouUrl, 2000),
     allowedDomains: normDomains(input.allowedDomains),
@@ -150,6 +161,7 @@ export function applyPopupUpdate(
       : existing.buttonText,
     imageUrl: has('imageUrl') ? sanitize(input.imageUrl, 2000) : existing.imageUrl,
     fields: has('fields') ? normFields(input.fields) : existing.fields,
+    trigger: has('trigger') ? normalizeTrigger(input.trigger, existing.id) : normalizeTrigger(existing.trigger, existing.id),
     gcTagId: has('gcTagId') ? sanitize(input.gcTagId, 200) : existing.gcTagId,
     thankYouUrl: has('thankYouUrl')
       ? sanitize(input.thankYouUrl, 2000)

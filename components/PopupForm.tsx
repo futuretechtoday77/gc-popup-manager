@@ -23,6 +23,7 @@ export interface PopupFormValue {
   buttonText: string;
   imageUrl: string;
   fields: PopupField[];
+  trigger: { type: 'button' | 'delay' | 'exitIntent'; delaySeconds: number; buttonSelector: string; showOncePerSession: boolean };
   gcTagId: string;
   thankYouUrl: string;
   allowedDomains: string; // newline/comma separated in the form
@@ -46,6 +47,7 @@ export function emptyForm(): PopupFormValue {
     buttonText: 'Submit',
     imageUrl: '',
     fields: cloneDefaults(),
+    trigger: { type: 'button', delaySeconds: 30, buttonSelector: '', showOncePerSession: true },
     gcTagId: '',
     thankYouUrl: '',
     allowedDomains: '',
@@ -73,6 +75,7 @@ export function fromPopup(p: Popup): PopupFormValue {
     buttonText: p.buttonText,
     imageUrl: p.imageUrl,
     fields,
+    trigger: { type: p.trigger?.type || 'button', delaySeconds: p.trigger?.delaySeconds || 30, buttonSelector: p.trigger?.buttonSelector || '', showOncePerSession: p.trigger?.showOncePerSession !== false },
     gcTagId: p.gcTagId,
     thankYouUrl: p.thankYouUrl,
     allowedDomains: (p.allowedDomains || []).join('\n'),
@@ -526,7 +529,9 @@ export default function PopupForm({
             </div>
           </section>
 
-          <div className="flex justify-end">
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"><h2 className="mb-2 font-semibold text-gray-900">Trigger</h2><p className="mb-4 text-sm text-gray-500">Button activated is recommended and never opens an overlay until clicked.</p><select className={input} value={v.trigger.type} onChange={(e) => set('trigger', { ...v.trigger, type: e.target.value as PopupFormValue['trigger']['type'] })}><option value="button">Button activated (recommended)</option><option value="delay">Delayed page load</option><option value="exitIntent">Exit intent (desktop only)</option></select>{v.trigger.type === 'button' && <><label className={label}>Optional CSS selector</label><input className={input} value={v.trigger.buttonSelector} onChange={(e) => set('trigger', { ...v.trigger, buttonSelector: e.target.value })} placeholder="#open-offer or .open-popup" /><p className="mt-2 text-sm text-gray-500">Or add <code>data-gc-popup-trigger=&quot;{v.id || 'popup-id'}&quot;</code> to a button.</p></>}{v.trigger.type === 'delay' && <><label className={label}>Delay in seconds (1 to 86,400)</label><input className={input} type="number" min="1" max="86400" value={v.trigger.delaySeconds} onChange={(e) => set('trigger', { ...v.trigger, delaySeconds: Math.max(1, Math.min(86400, Number(e.target.value) || 1)) })} /><p className="mt-2 text-sm text-gray-500">Opens after {v.trigger.delaySeconds} seconds.</p></>}<label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={v.trigger.showOncePerSession} onChange={(e) => set('trigger', { ...v.trigger, showOncePerSession: e.target.checked })} /> Show once per browser session</label></section>
+
+      <div className="flex justify-end">
             <button
               type="submit"
               disabled={submitting}

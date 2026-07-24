@@ -120,8 +120,41 @@ Copy `.env.example` to `.env.local` for local development.
    <script src="https://YOUR-APP.vercel.app/embed.js" data-popup-id="your-popup-id" async></script>
    ```
 
-3. Paste it into the target site's HTML (before `</body>`). The modal opens on
-   load. You can also trigger it manually with `window.GCPopup.open()`.
+3. Paste it into the target site's HTML (before `</body>`). New popups default to
+   **button activation**, so the script does not show an overlay just by loading.
+
+### Trigger modes
+
+Each popup has a trigger setting in the admin builder. The public config contains
+only these display/behavior settings; it never exposes Global Control credentials,
+tag IDs, or allowed domains.
+
+- **Button activated (recommended/default):** add this attribute to a button or
+  link on the visitor site. The popup opens only after a click:
+
+  ```html
+  <button data-gc-popup-trigger="your-popup-id">Get the offer</button>
+  ```
+
+  You can also enter a CSS selector such as `#open-offer` or `.open-popup` in
+  the builder. Both the data attribute and configured selector are bound. The
+  embed avoids duplicate listener bindings.
+- **Delayed page load:** choose any whole-second delay from **1 to 86,400**
+  seconds (24 hours). The default delay value is 30 seconds, but button mode is
+  the default trigger. Use a longer delay when an immediate interruption would
+  be annoying.
+- **Exit intent:** on desktop, the popup opens when the mouse leaves near the
+  top of the viewport. Touch/mobile devices intentionally do nothing for this
+  trigger so visitors do not get a surprise overlay.
+
+The **Show once per browser session** option is on by default. When enabled,
+the embed records the first display in `sessionStorage`; a close or later button
+click in the same tab session will not re-open the popup. Turn it off only when
+repeat opening during a session is intentional.
+
+`window.GCPopup.open()` and `window.GCPopup.close()` remain available for a
+manual integration. The normal data attribute is preferred because it is
+platform-independent.
 
 The script is vanilla JS with no dependencies and works cross-origin. It fetches
 only public display fields — `gcTagId` and `allowedDomains` are never exposed.
@@ -156,7 +189,7 @@ only public display fields — `gcTagId` and `allowedDomains` are never exposed.
 ## Local development
 
 ```bash
-npm install
+npm install --include=dev
 cp .env.example .env.local   # fill in values
 npm run dev
 ```

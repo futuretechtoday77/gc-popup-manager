@@ -1,6 +1,8 @@
 export type FieldKey = 'firstName' | 'phone' | 'notes';
 
 export type PopupTemplate = 'classic' | 'minimal' | 'slideup' | 'split';
+export type PopupTriggerType = 'button' | 'delay' | 'exitIntent';
+export interface PopupTrigger { type: PopupTriggerType; delaySeconds?: number; buttonSelector?: string; showOncePerSession: boolean; }
 
 export interface PopupField {
   key: FieldKey;
@@ -29,6 +31,7 @@ export interface Popup {
   buttonText: string;
   imageUrl: string;
   fields: PopupField[];
+  trigger: PopupTrigger;
   gcTagId: string; // NEVER exposed publicly
   thankYouUrl: string;
   allowedDomains: string[]; // NEVER exposed publicly
@@ -83,6 +86,7 @@ export interface PublicPopupConfig {
   buttonText: string;
   imageUrl: string;
   fields: PopupField[];
+  trigger: PopupTrigger;
   thankYouUrl: string;
   style: PopupStyle;
 }
