@@ -25,18 +25,18 @@ export async function POST(req: NextRequest) {
   const popupId = sanitize(body.popupId, 128);
   const email = sanitize(body.email, 320).toLowerCase();
 
-  // 2. Validate email + popupId present, email format valid.
+  // Validate email + popupId present, email format valid.
   if (!popupId) return withCors(error('popupId is required', 400));
   if (!email) return withCors(error('email is required', 400));
   if (!isValidEmail(email)) return withCors(error('Invalid email address', 400));
 
-  // 3. Load popup, confirm active.
+  // Load popup, confirm active.
   const popup = await getPopup(popupId);
   if (!popup || popup.status !== 'active') {
     return withCors(error('Popup not found or inactive', 404));
   }
 
-  // 1. Check Origin/Referer against popup.allowedDomains.
+  // Check Origin/Referer against popup.allowedDomains.
   const originHost = hostFrom(req.headers.get('origin'));
   const refererHost = hostFrom(req.headers.get('referer'));
   const sourceHost = originHost || refererHost;
@@ -49,7 +49,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 4. Sanitize inputs.
+  // Collect any field values declared by the popup (keyed by field key).
+  // firstName / phone / notes are mirrored into their dedicated columns for
+  // the queue processor and existing views; everything is kept in `extra`.
+  const extra: Record<string, string> = {};
+  const enabledKeys = (popup.fields || [])
+    .filter((f) => f.enabled)
+    .map((f) => f.key);
+  for (const key of enabledKeys) {
+    const raw = body[key];
+    if (raw === undefined || raw === null) continue;
+    extra[key] = sanitize(raw, key === 'notes' ? 2000 : 200);
+  }
+
   const submission: Submission = {
     id: newId(),
     popupId,
@@ -57,6 +69,7 @@ export async function POST(req: NextRequest) {
     firstName: sanitize(body.firstName, 200),
     phone: sanitize(body.phone, 60),
     notes: sanitize(body.notes, 2000),
+    extra,
     sourceDomain: sourceHost || '',
     sourceUrl: sanitize(req.headers.get('referer'), 2000),
     userAgent: sanitize(req.headers.get('user-agent'), 500),
@@ -69,10 +82,10 @@ export async function POST(req: NextRequest) {
     error: null,
   };
 
-  // 5. Store + enqueue.
+  // Store + enqueue.
   await saveSubmission(submission);
   await enqueue(submission.id);
 
-  // 6. Return immediately. No Global Control call here.
+  // Return immediately. No Global Control call here.
   return withCors(ok({ submissionId: submission.id }));
 }

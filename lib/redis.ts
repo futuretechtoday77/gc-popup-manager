@@ -1,5 +1,5 @@
 import { Redis } from '@upstash/redis';
-import type { Popup, Submission, PublicPopupConfig } from './types';
+import type { Popup, PopupField, Submission, PublicPopupConfig } from './types';
 
 let _redis: Redis | null = null;
 
@@ -40,6 +40,43 @@ function coerce<T>(value: unknown): T | null {
   return value as T;
 }
 
+// Existing popups in Redis may still have the legacy `fields` boolean map and
+// no `template` / `style.textColor`. Normalize any popup read from storage to
+// the current shape before it is returned anywhere.
+export function migratePopupFields(popup: any): Popup {
+  if (!popup || typeof popup !== 'object') return popup;
+
+  const style = popup.style || {};
+  const migratedStyle = {
+    primaryColor: style.primaryColor || '#ffffff',
+    buttonColor: style.buttonColor || '#22c55e',
+    textColor: style.textColor || '#1a1a1a',
+  };
+
+  // Already the new array shape — only backfill template/style and return.
+  if (Array.isArray(popup.fields)) {
+    return {
+      ...popup,
+      template: popup.template || 'classic',
+      style: migratedStyle,
+    } as Popup;
+  }
+
+  const oldFields = (popup.fields || {}) as Record<string, unknown>;
+  const fields: PopupField[] = [
+    { key: 'firstName', enabled: !!oldFields.firstName, label: 'First Name', placeholder: 'Your first name', required: false, order: 0 },
+    { key: 'phone', enabled: !!oldFields.phone, label: 'Phone', placeholder: 'Your phone number', required: false, order: 1 },
+    { key: 'notes', enabled: !!oldFields.notes, label: 'Notes', placeholder: 'Anything else?', required: false, order: 2 },
+  ];
+
+  return {
+    ...popup,
+    template: popup.template || 'classic',
+    fields,
+    style: migratedStyle,
+  } as Popup;
+}
+
 // ---- Popup ops ----
 export async function savePopup(popup: Popup): Promise<void> {
   const redis = getRedis();
@@ -49,7 +86,8 @@ export async function savePopup(popup: Popup): Promise<void> {
 
 export async function getPopup(id: string): Promise<Popup | null> {
   const redis = getRedis();
-  return coerce<Popup>(await redis.get(keys.popup(id)));
+  const raw = coerce<Popup>(await redis.get(keys.popup(id)));
+  return raw ? migratePopupFields(raw) : null;
 }
 
 export async function getAllPopupIds(): Promise<string[]> {
@@ -67,6 +105,7 @@ export async function getAllPopups(): Promise<Popup[]> {
 export function toPublicConfig(popup: Popup): PublicPopupConfig {
   return {
     id: popup.id,
+    template: popup.template,
     headline: popup.headline,
     subHeadline: popup.subHeadline,
     bodyText: popup.bodyText,

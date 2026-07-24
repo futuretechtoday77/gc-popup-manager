@@ -1,6 +1,16 @@
-import type { Popup, PopupFields, PopupStyle } from './types';
+import type {
+  Popup,
+  PopupField,
+  PopupStyle,
+  PopupTemplate,
+  FieldKey,
+} from './types';
+import { DEFAULT_FIELDS } from './types';
 import { sanitize, slugify } from './validate';
 import { nowIso } from './id';
+
+const FIELD_KEYS: FieldKey[] = ['firstName', 'phone', 'notes'];
+const TEMPLATES: PopupTemplate[] = ['classic', 'minimal', 'slideup', 'split'];
 
 function boolField(v: unknown, def = false): boolean {
   if (typeof v === 'boolean') return v;
@@ -9,20 +19,70 @@ function boolField(v: unknown, def = false): boolean {
   return def;
 }
 
-function normFields(v: unknown): PopupFields {
-  const f = (v || {}) as Record<string, unknown>;
-  return {
-    firstName: boolField(f.firstName, true),
-    phone: boolField(f.phone, false),
-    notes: boolField(f.notes, false),
-  };
+function defaultFor(key: FieldKey): PopupField {
+  const d = DEFAULT_FIELDS.find((f) => f.key === key);
+  // DEFAULT_FIELDS always contains all three keys.
+  return d ? { ...d } : { key, enabled: false, label: key, placeholder: '', required: false, order: 0 };
+}
+
+// Accept either the new ordered array shape or the legacy boolean map and
+// always return a normalized, fully-populated ordered array of all three
+// known field keys.
+export function normFields(v: unknown): PopupField[] {
+  // Legacy boolean map { firstName, phone, notes }.
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    const map = v as Record<string, unknown>;
+    const looksLegacy = FIELD_KEYS.some((k) => typeof map[k] === 'boolean');
+    if (looksLegacy) {
+      return FIELD_KEYS.map((key, i) => {
+        const base = defaultFor(key);
+        return { ...base, enabled: boolField(map[key], base.enabled), order: i };
+      });
+    }
+  }
+
+  const arr = Array.isArray(v) ? v : [];
+  const byKey = new Map<FieldKey, PopupField>();
+  for (const raw of arr) {
+    if (!raw || typeof raw !== 'object') continue;
+    const r = raw as Record<string, unknown>;
+    const key = sanitize(r.key, 32) as FieldKey;
+    if (!FIELD_KEYS.includes(key)) continue;
+    const base = defaultFor(key);
+    const orderNum = Number(r.order);
+    byKey.set(key, {
+      key,
+      enabled: boolField(r.enabled, base.enabled),
+      label: sanitize(r.label, 100) || base.label,
+      placeholder: sanitize(r.placeholder, 200) || base.placeholder,
+      required: boolField(r.required, base.required),
+      order: Number.isFinite(orderNum) ? orderNum : base.order,
+    });
+  }
+
+  // Ensure every known key exists (fill any that were missing from input).
+  for (const key of FIELD_KEYS) {
+    if (!byKey.has(key)) byKey.set(key, defaultFor(key));
+  }
+
+  const out = Array.from(byKey.values());
+  // Sort by declared order, then re-normalize order to 0-based contiguous.
+  out.sort((a, b) => a.order - b.order);
+  out.forEach((f, i) => (f.order = i));
+  return out;
+}
+
+function normTemplate(v: unknown): PopupTemplate {
+  const s = sanitize(v, 16) as PopupTemplate;
+  return TEMPLATES.includes(s) ? s : 'classic';
 }
 
 function normStyle(v: unknown): PopupStyle {
   const s = (v || {}) as Record<string, unknown>;
   return {
-    primaryColor: sanitize(s.primaryColor, 32) || '#111827',
-    buttonColor: sanitize(s.buttonColor, 32) || '#2563eb',
+    primaryColor: sanitize(s.primaryColor, 32) || '#ffffff',
+    buttonColor: sanitize(s.buttonColor, 32) || '#22c55e',
+    textColor: sanitize(s.textColor, 32) || '#1a1a1a',
   };
 }
 
@@ -52,6 +112,7 @@ export function buildNewPopup(input: Record<string, unknown>): Popup {
     name,
     site: sanitize(input.site, 120),
     status: normStatus(input.status),
+    template: normTemplate(input.template),
     headline: sanitize(input.headline, 300),
     subHeadline: sanitize(input.subHeadline, 300),
     bodyText: sanitize(input.bodyText, 2000),
@@ -78,6 +139,7 @@ export function applyPopupUpdate(
     name: has('name') ? sanitize(input.name, 200) || existing.name : existing.name,
     site: has('site') ? sanitize(input.site, 120) : existing.site,
     status: has('status') ? normStatus(input.status) : existing.status,
+    template: has('template') ? normTemplate(input.template) : existing.template,
     headline: has('headline') ? sanitize(input.headline, 300) : existing.headline,
     subHeadline: has('subHeadline')
       ? sanitize(input.subHeadline, 300)

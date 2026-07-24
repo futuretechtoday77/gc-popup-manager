@@ -1,12 +1,20 @@
-export interface PopupFields {
-  firstName: boolean;
-  phone: boolean;
-  notes: boolean;
+export type FieldKey = 'firstName' | 'phone' | 'notes';
+
+export type PopupTemplate = 'classic' | 'minimal' | 'slideup' | 'split';
+
+export interface PopupField {
+  key: FieldKey;
+  enabled: boolean;
+  label: string;        // display label e.g. "First Name"
+  placeholder: string;  // input placeholder
+  required: boolean;
+  order: number;        // 0-based sort order
 }
 
 export interface PopupStyle {
-  primaryColor: string;
-  buttonColor: string;
+  primaryColor: string;  // card / modal background colour
+  buttonColor: string;   // submit button background
+  textColor: string;     // body + headline text
 }
 
 export interface Popup {
@@ -14,12 +22,13 @@ export interface Popup {
   name: string;
   site: string; // free-text brand label e.g. "rifecode"
   status: 'active' | 'inactive' | 'draft';
+  template: PopupTemplate;
   headline: string;
   subHeadline: string;
   bodyText: string;
   buttonText: string;
   imageUrl: string;
-  fields: PopupFields;
+  fields: PopupField[];
   gcTagId: string; // NEVER exposed publicly
   thankYouUrl: string;
   allowedDomains: string[]; // NEVER exposed publicly
@@ -27,6 +36,13 @@ export interface Popup {
   createdAt: string;
   updatedAt: string;
 }
+
+// The canonical default fields array for a brand-new popup.
+export const DEFAULT_FIELDS: PopupField[] = [
+  { key: 'firstName', enabled: true,  label: 'First Name',  placeholder: 'Your first name',   required: false, order: 0 },
+  { key: 'phone',     enabled: false, label: 'Phone',       placeholder: 'Your phone number', required: false, order: 1 },
+  { key: 'notes',     enabled: false, label: 'Notes',       placeholder: 'Anything else?',    required: false, order: 2 },
+];
 
 export type SubmissionStatus =
   | 'queued'
@@ -42,6 +58,8 @@ export interface Submission {
   firstName: string;
   phone: string;
   notes: string;
+  // Arbitrary extra field values keyed by field key.
+  extra?: Record<string, string>;
   sourceDomain: string;
   sourceUrl: string;
   userAgent: string;
@@ -55,14 +73,16 @@ export interface Submission {
 }
 
 // Only these fields are ever returned by the public config endpoint.
+// gcTagId and allowedDomains are intentionally omitted.
 export interface PublicPopupConfig {
   id: string;
+  template: PopupTemplate;
   headline: string;
   subHeadline: string;
   bodyText: string;
   buttonText: string;
   imageUrl: string;
-  fields: PopupFields;
+  fields: PopupField[];
   thankYouUrl: string;
   style: PopupStyle;
 }
