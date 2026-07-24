@@ -35,16 +35,15 @@ All state lives in Upstash Redis. There is no SQL database.
 
 ### Redis keys
 
-| Key | Type | Purpose |
-| --- | --- | --- |
-| `popup:{id}` | string (JSON) | One popup definition |
-| `popups:index` | set | All popup IDs |
-| `popup:{id}:submissions` | sorted set | Submission IDs by timestamp |
-| `submission:{id}` | string (JSON) | One submission |
-| `queue:pending` | list | Work queue (RPUSH / LPOP) |
-| `queue:failed` | set | Submissions that hit max retries |
-| `uploads:index` | list | Uploaded image records (newest first) |
-
+| Key                      | Type          | Purpose                               |
+| ------------------------ | ------------- | ------------------------------------- |
+| `popup:{id}`             | string (JSON) | One popup definition                  |
+| `popups:index`           | set           | All popup IDs                         |
+| `popup:{id}:submissions` | sorted set    | Submission IDs by timestamp           |
+| `submission:{id}`        | string (JSON) | One submission                        |
+| `queue:pending`          | list          | Work queue (RPUSH / LPOP)             |
+| `queue:failed`           | set           | Submissions that hit max retries      |
+| `uploads:index`          | list          | Uploaded image records (newest first) |
 
 ## Image Storage (Vercel Blob)
 
@@ -72,23 +71,23 @@ Every successful upload stores a JSON record in Redis under the list key
 `uploads:index` so the library modal can list past images. No extra setup
 needed — the same Upstash Redis instance is reused.
 
-| Redis key | Type | Purpose |
-| --- | --- | --- |
+| Redis key       | Type | Purpose                                             |
+| --------------- | ---- | --------------------------------------------------- |
 | `uploads:index` | list | JSON records for each uploaded image (newest first) |
 
 ## Environment variables
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `GC_API_KEY` | yes | Global Control API key (sent as `X-API-KEY`) |
-| `GC_API_URL` | yes | GC API base, e.g. `https://api.globalcontrol.io/api/ai` |
-| `UPSTASH_REDIS_REST_URL` | yes | Upstash Redis REST URL |
-| `UPSTASH_REDIS_REST_TOKEN` | yes | Upstash Redis REST token |
-| `ADMIN_PASSWORD` | yes | Password for the admin UI login |
-| `JWT_SECRET` | yes | Secret used to sign admin JWTs |
-| `CRON_SECRET` | recommended | Shared secret protecting the cron endpoint |
-| `NEXT_PUBLIC_APP_URL` | optional | Public origin used when building embed snippets (auto-detected from request headers if omitted) |
-| `BLOB_READ_WRITE_TOKEN` | yes | Vercel Blob store token for image uploads (see Image Storage section) |
+| Variable                   | Required    | Description                                                                                     |
+| -------------------------- | ----------- | ----------------------------------------------------------------------------------------------- |
+| `GC_API_KEY`               | yes         | Global Control API key (sent as `X-API-KEY`)                                                    |
+| `GC_API_URL`               | yes         | GC API base, e.g. `https://api.globalcontrol.io/api/ai`                                         |
+| `UPSTASH_REDIS_REST_URL`   | yes         | Upstash Redis REST URL                                                                          |
+| `UPSTASH_REDIS_REST_TOKEN` | yes         | Upstash Redis REST token                                                                        |
+| `ADMIN_PASSWORD`           | yes         | Password for the admin UI login                                                                 |
+| `JWT_SECRET`               | yes         | Secret used to sign admin JWTs                                                                  |
+| `CRON_SECRET`              | recommended | Shared secret protecting the cron endpoint                                                      |
+| `NEXT_PUBLIC_APP_URL`      | optional    | Public origin used when building embed snippets (auto-detected from request headers if omitted) |
+| `BLOB_READ_WRITE_TOKEN`    | yes         | Vercel Blob store token for image uploads (see Image Storage section)                           |
 
 Copy `.env.example` to `.env.local` for local development.
 
@@ -103,7 +102,9 @@ Copy `.env.example` to `.env.local` for local development.
 5. Deploy. `vercel.json` registers the cron automatically:
 
    ```json
-   { "crons": [{ "path": "/api/cron/process-queue", "schedule": "*/5 * * * *" }] }
+   {
+     "crons": [{ "path": "/api/cron/process-queue", "schedule": "*/5 * * * *" }]
+   }
    ```
 
 6. Vercel Cron calls the endpoint on schedule. Set `CRON_SECRET` and Vercel
@@ -117,7 +118,11 @@ Copy `.env.example` to `.env.local` for local development.
 2. Open the popup and copy the embed snippet:
 
    ```html
-   <script src="https://YOUR-APP.vercel.app/embed.js" data-popup-id="your-popup-id" async></script>
+   <script
+     src="https://YOUR-APP.vercel.app/embed.js"
+     data-popup-id="your-popup-id"
+     async
+   ></script>
    ```
 
 3. Paste it into the target site's HTML (before `</body>`). New popups default to
@@ -139,6 +144,7 @@ tag IDs, or allowed domains.
   You can also enter a CSS selector such as `#open-offer` or `.open-popup` in
   the builder. Both the data attribute and configured selector are bound. The
   embed avoids duplicate listener bindings.
+
 - **Delayed page load:** choose any whole-second delay from **1 to 86,400**
   seconds (24 hours). The default delay value is 30 seconds, but button mode is
   the default trigger. Use a longer delay when an immediate interruption would
@@ -198,3 +204,24 @@ npm run dev
 
 Next.js 14 (App Router) · TypeScript · Upstash Redis · Tailwind CSS · JWT auth ·
 Vercel Cron.
+
+## Image framing and responsive behavior
+
+The popup builder keeps image presentation with the popup definition, so the
+admin live preview and the public embed use the same crop and sizing rules.
+
+- **Fit:** choose **Crop to frame** (`cover`), **Show whole image** (`contain`),
+  or **Stretch** (`fill`).
+- **Position:** choose the focal direction used when an image is cropped.
+- **Scale:** adjust the image inside its crop frame from 50% to 150%.
+- **Heights:** choose separate desktop (100–360px) and mobile (100–260px)
+  image-frame heights for templates that show an image.
+- **Classic:** uses the configured fixed frame instead of the source image's
+  natural dimensions, keeping the card responsive and desktop sizing tidy.
+- **Split:** uses a stable 45% image panel with a 360px minimum height on
+  desktop. The image panel is intentionally hidden on mobile, where the form
+  becomes single-column.
+
+If a configured image cannot load, the preview and embed show an explicit
+“Image unavailable” state rather than leaving an empty area. Existing popup
+records without image settings automatically receive safe template defaults.

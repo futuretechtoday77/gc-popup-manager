@@ -1,8 +1,13 @@
-'use client';
+"use client";
 
-import { useMemo } from 'react';
-import { buildPopup } from '@/lib/popup-render';
-import type { PopupField, PopupStyle, PopupTemplate } from '@/lib/types';
+import { useMemo } from "react";
+import { buildPopup } from "@/lib/popup-render";
+import type {
+  PopupField,
+  PopupImageSettings,
+  PopupStyle,
+  PopupTemplate,
+} from "@/lib/types";
 
 export interface PreviewData {
   id: string;
@@ -12,6 +17,7 @@ export interface PreviewData {
   bodyText: string;
   buttonText: string;
   imageUrl: string;
+  imageSettings: PopupImageSettings;
   fields: PopupField[];
   style: PopupStyle;
 }
@@ -35,17 +41,17 @@ export default function PopupPreview({
   device,
 }: {
   data: PreviewData;
-  device: 'mobile' | 'desktop';
+  device: "mobile" | "desktop";
 }) {
-  const width = device === 'mobile' ? 375 : 480;
-  const height = device === 'mobile' ? 600 : 520;
+  const width = device === "mobile" ? 375 : 480;
+  const height = device === "mobile" ? 600 : 520;
 
   const srcDoc = useMemo(() => {
     let built: { css: string; html: string };
     try {
       built = buildPopup(data);
     } catch {
-      built = { css: '', html: '' };
+      built = { css: "", html: "" };
     }
     return `<!doctype html><html><head><meta charset="utf-8"/>
       <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -63,11 +69,11 @@ export default function PopupPreview({
         <iframe
           title="Popup preview"
           srcDoc={srcDoc}
-          style={{ width, height, border: 'none', display: 'block' }}
+          style={{ width, height, border: "none", display: "block" }}
         />
       </div>
       <p className="mt-2 text-xs text-gray-400">
-        {device === 'mobile' ? 'Mobile · 375px' : 'Desktop · 480px'}
+        {device === "mobile" ? "Mobile · 375px" : "Desktop · 480px"}
       </p>
     </div>
   );

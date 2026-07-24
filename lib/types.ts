@@ -1,35 +1,49 @@
-export type FieldKey = 'firstName' | 'phone' | 'notes';
+export type FieldKey = "firstName" | "phone" | "notes";
 
-export type PopupTemplate = 'classic' | 'minimal' | 'slideup' | 'split';
-export type PopupTriggerType = 'button' | 'delay' | 'exitIntent';
-export interface PopupTrigger { type: PopupTriggerType; delaySeconds?: number; buttonSelector?: string; showOncePerSession: boolean; }
+export type PopupTemplate = "classic" | "minimal" | "slideup" | "split";
+export type PopupTriggerType = "button" | "delay" | "exitIntent";
+export interface PopupTrigger {
+  type: PopupTriggerType;
+  delaySeconds?: number;
+  buttonSelector?: string;
+  showOncePerSession: boolean;
+}
 
 export interface PopupField {
   key: FieldKey;
   enabled: boolean;
-  label: string;        // display label e.g. "First Name"
-  placeholder: string;  // input placeholder
+  label: string; // display label e.g. "First Name"
+  placeholder: string; // input placeholder
   required: boolean;
-  order: number;        // 0-based sort order
+  order: number; // 0-based sort order
+}
+
+export interface PopupImageSettings {
+  fit: "cover" | "contain" | "fill";
+  position: string;
+  scale: number;
+  desktopHeight: number;
+  mobileHeight: number;
 }
 
 export interface PopupStyle {
-  primaryColor: string;  // card / modal background colour
-  buttonColor: string;   // submit button background
-  textColor: string;     // body + headline text
+  primaryColor: string; // card / modal background colour
+  buttonColor: string; // submit button background
+  textColor: string; // body + headline text
 }
 
 export interface Popup {
   id: string; // human-readable slug e.g. "rife-main-optin"
   name: string;
   site: string; // free-text brand label e.g. "rifecode"
-  status: 'active' | 'inactive' | 'draft';
+  status: "active" | "inactive" | "draft";
   template: PopupTemplate;
   headline: string;
   subHeadline: string;
   bodyText: string;
   buttonText: string;
   imageUrl: string;
+  imageSettings: PopupImageSettings;
   fields: PopupField[];
   trigger: PopupTrigger;
   gcTagId: string; // NEVER exposed publicly
@@ -42,17 +56,34 @@ export interface Popup {
 
 // The canonical default fields array for a brand-new popup.
 export const DEFAULT_FIELDS: PopupField[] = [
-  { key: 'firstName', enabled: true,  label: 'First Name',  placeholder: 'Your first name',   required: false, order: 0 },
-  { key: 'phone',     enabled: false, label: 'Phone',       placeholder: 'Your phone number', required: false, order: 1 },
-  { key: 'notes',     enabled: false, label: 'Notes',       placeholder: 'Anything else?',    required: false, order: 2 },
+  {
+    key: "firstName",
+    enabled: true,
+    label: "First Name",
+    placeholder: "Your first name",
+    required: false,
+    order: 0,
+  },
+  {
+    key: "phone",
+    enabled: false,
+    label: "Phone",
+    placeholder: "Your phone number",
+    required: false,
+    order: 1,
+  },
+  {
+    key: "notes",
+    enabled: false,
+    label: "Notes",
+    placeholder: "Anything else?",
+    required: false,
+    order: 2,
+  },
 ];
 
 export type SubmissionStatus =
-  | 'queued'
-  | 'processing'
-  | 'processed'
-  | 'failed'
-  | 'max_retries';
+  "queued" | "processing" | "processed" | "failed" | "max_retries";
 
 export interface Submission {
   id: string;
@@ -85,6 +116,7 @@ export interface PublicPopupConfig {
   bodyText: string;
   buttonText: string;
   imageUrl: string;
+  imageSettings: PopupImageSettings;
   fields: PopupField[];
   trigger: PopupTrigger;
   thankYouUrl: string;

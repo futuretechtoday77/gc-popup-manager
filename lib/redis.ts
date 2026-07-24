@@ -1,6 +1,6 @@
-import { Redis } from '@upstash/redis';
-import type { Popup, PopupField, Submission, PublicPopupConfig } from './types';
-import { normalizeTrigger } from './popup-shape';
+import { Redis } from "@upstash/redis";
+import type { Popup, PopupField, Submission, PublicPopupConfig } from "./types";
+import { normalizeImageSettings, normalizeTrigger } from "./popup-shape";
 
 let _redis: Redis | null = null;
 
@@ -10,7 +10,7 @@ export function getRedis(): Redis {
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) {
     throw new Error(
-      'Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN environment variables',
+      "Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN environment variables",
     );
   }
   _redis = new Redis({ url, token });
@@ -31,7 +31,7 @@ export const keys = {
 // stored as an object it comes back as an object; guard for string too.
 function coerce<T>(value: unknown): T | null {
   if (value === null || value === undefined) return null;
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     try {
       return JSON.parse(value) as T;
     } catch {
@@ -45,34 +45,65 @@ function coerce<T>(value: unknown): T | null {
 // no `template` / `style.textColor`. Normalize any popup read from storage to
 // the current shape before it is returned anywhere.
 export function migratePopupFields(popup: any): Popup {
-  if (!popup || typeof popup !== 'object') return popup;
+  if (!popup || typeof popup !== "object") return popup;
 
   const style = popup.style || {};
   const migratedStyle = {
-    primaryColor: style.primaryColor || '#ffffff',
-    buttonColor: style.buttonColor || '#22c55e',
-    textColor: style.textColor || '#1a1a1a',
+    primaryColor: style.primaryColor || "#ffffff",
+    buttonColor: style.buttonColor || "#22c55e",
+    textColor: style.textColor || "#1a1a1a",
   };
 
   // Already the new array shape — only backfill template/style and return.
   if (Array.isArray(popup.fields)) {
     return {
       ...popup,
-      template: popup.template || 'classic',
+      template: popup.template || "classic",
+      imageSettings: normalizeImageSettings(
+        popup.imageSettings,
+        popup.template || "classic",
+      ),
+      trigger: normalizeTrigger(popup.trigger, popup.id),
       style: migratedStyle,
     } as Popup;
   }
 
   const oldFields = (popup.fields || {}) as Record<string, unknown>;
   const fields: PopupField[] = [
-    { key: 'firstName', enabled: !!oldFields.firstName, label: 'First Name', placeholder: 'Your first name', required: false, order: 0 },
-    { key: 'phone', enabled: !!oldFields.phone, label: 'Phone', placeholder: 'Your phone number', required: false, order: 1 },
-    { key: 'notes', enabled: !!oldFields.notes, label: 'Notes', placeholder: 'Anything else?', required: false, order: 2 },
+    {
+      key: "firstName",
+      enabled: !!oldFields.firstName,
+      label: "First Name",
+      placeholder: "Your first name",
+      required: false,
+      order: 0,
+    },
+    {
+      key: "phone",
+      enabled: !!oldFields.phone,
+      label: "Phone",
+      placeholder: "Your phone number",
+      required: false,
+      order: 1,
+    },
+    {
+      key: "notes",
+      enabled: !!oldFields.notes,
+      label: "Notes",
+      placeholder: "Anything else?",
+      required: false,
+      order: 2,
+    },
   ];
 
   return {
     ...popup,
-    template: popup.template || 'classic',
+    template: popup.template || "classic",
+    imageSettings: normalizeImageSettings(
+      popup.imageSettings,
+      popup.template || "classic",
+    ),
+    trigger: normalizeTrigger(popup.trigger, popup.id),
     fields,
     style: migratedStyle,
   } as Popup;
@@ -112,6 +143,7 @@ export function toPublicConfig(popup: Popup): PublicPopupConfig {
     bodyText: popup.bodyText,
     buttonText: popup.buttonText,
     imageUrl: popup.imageUrl,
+    imageSettings: normalizeImageSettings(popup.imageSettings, popup.template),
     fields: popup.fields,
     trigger: popup.trigger,
     thankYouUrl: popup.thankYouUrl,
