@@ -80,8 +80,12 @@ async function processOne(id: string): Promise<void> {
     submission.phone,
   );
 
+  // Send the full name as both `name` and `firstName` in the existing Global
+  // Control shape. GC parses first/last from the full name; keeping firstName
+  // preserves compatibility with the existing queue/CRM integration.
   const contactPayload: Record<string, unknown> = {
     email: submission.email,
+    name: mergedFirstName,
     firstName: mergedFirstName,
     phone: mergedPhone,
   };
@@ -119,9 +123,11 @@ async function processOne(id: string): Promise<void> {
     const needsPhoneRestore =
       mergedPhone.trim().length > 0 && phoneNow.trim().length === 0;
     if (needsNameRestore || needsPhoneRestore) {
+      const restoredName = preferExisting(nameNow, mergedFirstName);
       await updateContact(gcId, {
         email: submission.email,
-        firstName: preferExisting(nameNow, mergedFirstName),
+        name: restoredName,
+        firstName: restoredName,
         phone: preferExisting(phoneNow, mergedPhone),
       });
     }

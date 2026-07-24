@@ -1,4 +1,7 @@
-export type FieldKey = "firstName" | "phone" | "notes";
+// The user-facing "name" field replaced the legacy "firstName" field. Old
+// stored records may still carry the "firstName" key; those are migrated to
+// "name" on read (see popup-shape.normFields / redis.migratePopupFields).
+export type FieldKey = "name" | "phone" | "notes";
 
 export type PopupTemplate = "classic" | "minimal" | "slideup" | "split";
 export type PopupTriggerType = "button" | "delay" | "exitIntent";
@@ -12,7 +15,7 @@ export interface PopupTrigger {
 export interface PopupField {
   key: FieldKey;
   enabled: boolean;
-  label: string; // display label e.g. "First Name"
+  label: string; // display label e.g. "Name"
   placeholder: string; // input placeholder
   required: boolean;
   order: number; // 0-based sort order
@@ -30,6 +33,23 @@ export interface PopupStyle {
   primaryColor: string; // card / modal background colour
   buttonColor: string; // submit button background
   textColor: string; // body + headline text
+}
+
+// Responsive typography for the popup's text blocks. Desktop values are used
+// as-authored; the renderer clamps them to safe ranges on mobile.
+export type ContentAlign = "left" | "center" | "right";
+
+export interface ContentBlockStyle {
+  align: ContentAlign;
+  fontSize: number;
+  fontWeight: number;
+}
+
+export interface PopupContentStyle {
+  headline: ContentBlockStyle;
+  subHeadline: ContentBlockStyle;
+  bodyText: ContentBlockStyle;
+  fontFamily: string; // safe web-font key, resolved to a stack by the renderer
 }
 
 export interface PopupButtonStyle {
@@ -59,6 +79,8 @@ export interface PopupFolder {
 export const UNCATEGORIZED_FOLDER_ID = "uncategorized";
 export const UNCATEGORIZED_FOLDER_NAME = "Uncategorized";
 
+export const DEFAULT_SUCCESS_TEXT = "Thanks! Your submission was received.";
+
 export interface Popup {
   id: string; // human-readable slug e.g. "rife-main-optin"
   name: string;
@@ -71,11 +93,15 @@ export interface Popup {
   buttonText: string;
   imageUrl: string;
   imageSettings: PopupImageSettings;
+  contentStyle: PopupContentStyle;
   folderId: string;
   buttonStyle: PopupButtonStyle;
   fields: PopupField[];
   trigger: PopupTrigger;
   gcTagId: string; // NEVER exposed publicly
+  // Shown in-popup after a successful submission (line breaks allowed).
+  submissionSuccessText: string;
+  // Legacy: kept only for backward compatibility / migration of old popups.
   thankYouUrl: string;
   allowedDomains: string[]; // NEVER exposed publicly
   style: PopupStyle;
@@ -86,10 +112,10 @@ export interface Popup {
 // The canonical default fields array for a brand-new popup.
 export const DEFAULT_FIELDS: PopupField[] = [
   {
-    key: "firstName",
+    key: "name",
     enabled: true,
-    label: "First Name",
-    placeholder: "Your first name",
+    label: "Name",
+    placeholder: "Your full name",
     required: false,
     order: 0,
   },
@@ -118,6 +144,8 @@ export interface Submission {
   id: string;
   popupId: string;
   email: string;
+  // Stores the full name. Named `firstName` for storage/GC-shape compatibility
+  // with existing records and the Global Control API.
   firstName: string;
   phone: string;
   notes: string;
@@ -146,8 +174,11 @@ export interface PublicPopupConfig {
   buttonText: string;
   imageUrl: string;
   imageSettings: PopupImageSettings;
+  contentStyle: PopupContentStyle;
   fields: PopupField[];
   trigger: PopupTrigger;
+  submissionSuccessText: string;
+  // Legacy redirect target; only present/used for old popups that set it.
   thankYouUrl: string;
   style: PopupStyle;
 }

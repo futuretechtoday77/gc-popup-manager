@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { buildPopup } from '@/lib/popup-render';
+import { buildPopup, successHtml } from '@/lib/popup-render';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 // The shared renderer is serialized to source and shipped verbatim so the
 // embed script and the admin preview render from ONE implementation.
 const BUILD_POPUP_SRC = buildPopup.toString();
+const SUCCESS_HTML_SRC = successHtml.toString();
 
 // Self-contained, dependency-free embed script. Served as application/javascript.
 // Reads data-popup-id from its own <script> tag, fetches the public config,
@@ -16,6 +17,7 @@ const SCRIPT = String.raw`(function () {
   "use strict";
 
   var buildPopup = BUILD_POPUP_PLACEHOLDER;
+  var successHtml = SUCCESS_HTML_PLACEHOLDER;
 
   var current = document.currentScript;
   function findSelf() {
@@ -144,11 +146,24 @@ const SCRIPT = String.raw`(function () {
           if (msg) { msg.textContent = err.message || "Something went wrong."; msg.style.display = "block"; }
           return;
         }
-        if (cfg.thankYouUrl) {
+        var successText = cfg.submissionSuccessText;
+        var hasSuccessText =
+          typeof successText === "string" && successText.replace(/\s+/g, "").length > 0;
+        // New popups show an in-popup success notification. Legacy redirect is
+        // only honored for old popups that set thankYouUrl and have no success
+        // text of their own.
+        if (!hasSuccessText && cfg.thankYouUrl) {
           window.location.href = cfg.thankYouUrl;
-        } else if (body) {
-          body.innerHTML = '<div class="gcpm-thanks">Thank you!</div>';
+          return;
         }
+        var successMarkup = successHtml(
+          hasSuccessText ? successText : "Thanks! Your submission was received.",
+        );
+        var target =
+          body ||
+          root.querySelector(".gcpm-split-form") ||
+          root.querySelector(".gcpm-card");
+        if (target) target.innerHTML = successMarkup;
       });
     });
   }
@@ -184,7 +199,10 @@ const SCRIPT = String.raw`(function () {
   }
 })();`;
 
-const FINAL_SCRIPT = SCRIPT.replace('BUILD_POPUP_PLACEHOLDER', BUILD_POPUP_SRC);
+const FINAL_SCRIPT = SCRIPT.replace(
+  'BUILD_POPUP_PLACEHOLDER',
+  BUILD_POPUP_SRC,
+).replace('SUCCESS_HTML_PLACEHOLDER', SUCCESS_HTML_SRC);
 
 export function GET() {
   return new NextResponse(FINAL_SCRIPT, {

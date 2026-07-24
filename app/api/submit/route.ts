@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Collect any field values declared by the popup (keyed by field key).
-  // firstName / phone / notes are mirrored into their dedicated columns for
-  // the queue processor and existing views; everything is kept in `extra`.
+  // name / phone / notes are mirrored into their dedicated columns for the
+  // queue processor and existing views; everything is kept in `extra`.
   const extra: Record<string, string> = {};
   const enabledKeys = (popup.fields || [])
     .filter((f) => f.enabled)
@@ -62,11 +62,17 @@ export async function POST(req: NextRequest) {
     extra[key] = sanitize(raw, key === 'notes' ? 2000 : 200);
   }
 
+  // The full name arrives as `name` from new embeds; accept legacy `firstName`
+  // from older embeds/integrations for backward compatibility. It is stored in
+  // the `firstName` column to keep the existing GC processor / views working.
+  const fullName =
+    sanitize(body.name, 200) || sanitize(body.firstName, 200);
+
   const submission: Submission = {
     id: newId(),
     popupId,
     email,
-    firstName: sanitize(body.firstName, 200),
+    firstName: fullName,
     phone: sanitize(body.phone, 60),
     notes: sanitize(body.notes, 2000),
     extra,

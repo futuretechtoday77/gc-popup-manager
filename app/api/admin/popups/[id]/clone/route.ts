@@ -4,7 +4,8 @@ import { getPopup, savePopup } from "@/lib/redis";
 import { nowIso } from "@/lib/id";
 import { slugify } from "@/lib/validate";
 import { json, error, unauthorized } from "@/lib/http";
-import { UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
+import { UNCATEGORIZED_FOLDER_ID, DEFAULT_SUCCESS_TEXT } from "@/lib/types";
+import { defaultContentStyle, normalizeContentStyle, normalizeSuccessText } from "@/lib/popup-shape";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,10 +37,15 @@ export async function POST(
     imageSettings: { ...source.imageSettings },
     folderId: source.folderId || UNCATEGORIZED_FOLDER_ID,
     buttonStyle: { ...source.buttonStyle },
+    contentStyle: normalizeContentStyle(source.contentStyle),
     fields: source.fields.map((field) => ({ ...field })),
     trigger: { ...source.trigger },
     gcTagId: source.gcTagId,
-    thankYouUrl: source.thankYouUrl,
+    submissionSuccessText: normalizeSuccessText(
+      source.submissionSuccessText,
+      DEFAULT_SUCCESS_TEXT,
+    ),
+    thankYouUrl: source.thankYouUrl || "",
     allowedDomains: [...source.allowedDomains],
     style: { ...source.style },
     createdAt: now,

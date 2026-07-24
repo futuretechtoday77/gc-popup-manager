@@ -234,4 +234,62 @@ Popups can be grouped into admin-only folders. Legacy records without a folder a
 
 ## Trigger button styler
 
-For button-activated popups, the builder can generate a scoped trigger button style and ready-to-paste HTML. The generated CSS targets only `.gc-popup-trigger--{popupId}` and the HTML includes both that class and `data-gc-popup-trigger="{popupId}"`, so unrelated site buttons are not affected. Use the builder's **Copy CSS** and **Copy HTML** actions after choosing label, colors, width, alignment, font size, and radius.
+For button-activated popups, the builder generates one combined **Copy Button Code** snippet. It includes both the scoped CSS and the HTML trigger button in a single copyable block with an explanatory comment. Paste it where you want the button to appear on your site. The CSS targets only `.gc-popup-trigger--{popupId}` so unrelated site buttons are not affected. Use the builder's Copy Button Code action after customising label, colours, width, alignment, font size, and radius.
+
+---
+
+## Changes in this release
+
+### 1. Fixed split-template image and sticky preview
+- `gcpm-image-frame` is now a proper block element whose `<img>` fills it
+  absolutely, so it can never collapse. The split-form image panel uses
+  `flex:0 0 42%; align-self:stretch` so it always fills the card height.
+- Live preview panel is sticky on desktop with `max-height: calc(100vh - 3rem)`
+  and internal scroll. On mobile it returns to normal document flow.
+- Image-adjustment controls update the preview immediately via controlled state.
+
+### 2. Submission successful text (replaces thank-you page URL)
+- New `submissionSuccessText` field on `Popup` (default:
+  `"Thanks! Your submission was received."`).
+- Admin builder shows a **Submission Successful Text** textarea. Line breaks
+  are preserved safely (escaped then converted to `<br>`).
+- Legacy `thankYouUrl` is retained for backward compatibility: old popups
+  that set `thankYouUrl` and have no `submissionSuccessText` continue to
+  redirect as before. New popups show an in-popup success notification only.
+- `submissionSuccessText` is included in `PublicPopupConfig`; `thankYouUrl`
+  is still present for backwards-compatible old embeds.
+
+### 3. Name field (replaces First Name)
+- `FieldKey` is now `"name" | "phone" | "notes"` (legacy `"firstName"` key
+  is accepted everywhere and silently mapped to `"name"` on read).
+- The `name` field always renders **above** email in the popup form.
+- The submit API accepts `name` (new) or `firstName` (legacy) interchangeably
+  and stores the value in the existing `firstName` column for storage/GC
+  compatibility.
+- The GC queue processor sends both `name` and `firstName` in the contact
+  payload so Global Control can parse first/last as expected.
+- Clone, normalization, and legacy migration all propagate the rename.
+
+### 4. Combined button code output
+- The separate *Copy CSS* / *Copy HTML* buttons are replaced by a single
+  **Copy Button Code** action that outputs one ready-to-paste block containing
+  an explanatory comment, the scoped `<style>` tag, and the trigger `<button>`.
+  No keys, tag IDs, allowed-domains, or submission data are ever included.
+
+### 5. Content style / typography
+- New `contentStyle` object on `Popup` with `headline`, `subHeadline`, and
+  `bodyText` blocks (alignment, font-size, font-weight) and a `fontFamily`
+  key (system / Arial / Georgia / Verdana / sans-serif).
+- Desktop values are author-controlled; the renderer clamps them to
+  readable safe ranges on mobile (`headline` 18–28 px, sub-headline 13–18 px,
+  body text 13–16 px) via `@media (max-width:639px)` rules.
+- Both the admin preview and the public embed respect `contentStyle`.
+- `contentStyle` is included in `PublicPopupConfig`; admin-only fields
+  (`gcTagId`, `allowedDomains`, `buttonStyle`, `folderId`) remain excluded.
+
+### Compatibility
+- Old popups stored without `contentStyle` / `submissionSuccessText` /
+  `firstName→name` are normalised on read via `migratePopupFields` and the
+  `normFields` / `normalizeContentStyle` / `normalizeSuccessText` helpers.
+- Old embed scripts (`data-popup-id` attribute, `/api/popup/:id/config`,
+  `/api/submit`) continue to work without changes.

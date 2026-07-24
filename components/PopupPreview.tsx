@@ -5,6 +5,7 @@ import { buildPopup } from "@/lib/popup-render";
 import type {
   PopupField,
   PopupImageSettings,
+  PopupContentStyle,
   PopupStyle,
   PopupTemplate,
 } from "@/lib/types";
@@ -18,6 +19,7 @@ export interface PreviewData {
   buttonText: string;
   imageUrl: string;
   imageSettings: PopupImageSettings;
+  contentStyle: PopupContentStyle;
   fields: PopupField[];
   style: PopupStyle;
 }

@@ -1,16 +1,22 @@
 import { Redis } from "@upstash/redis";
 import type {
   Popup,
-  PopupField,
   Submission,
   PublicPopupConfig,
   PopupFolder,
 } from "./types";
-import { UNCATEGORIZED_FOLDER_ID, UNCATEGORIZED_FOLDER_NAME } from "./types";
+import {
+  UNCATEGORIZED_FOLDER_ID,
+  UNCATEGORIZED_FOLDER_NAME,
+  DEFAULT_SUCCESS_TEXT,
+} from "./types";
 import {
   normalizeButtonStyle,
   normalizeImageSettings,
+  normalizeContentStyle,
   normalizeTrigger,
+  normalizeSuccessText,
+  normFields,
 } from "./popup-shape";
 
 let _redis: Redis | null = null;
@@ -67,61 +73,37 @@ export function migratePopupFields(popup: any): Popup {
     textColor: style.textColor || "#1a1a1a",
   };
 
-  // Already the new array shape — only backfill template/style and return.
-  if (Array.isArray(popup.fields)) {
-    return {
-      ...popup,
-      template: popup.template || "classic",
-      folderId: popup.folderId || UNCATEGORIZED_FOLDER_ID,
-      buttonStyle: normalizeButtonStyle(popup.buttonStyle),
-      imageSettings: normalizeImageSettings(
-        popup.imageSettings,
-        popup.template || "classic",
-      ),
-      trigger: normalizeTrigger(popup.trigger, popup.id),
-      style: migratedStyle,
-    } as Popup;
-  }
-
-  const oldFields = (popup.fields || {}) as Record<string, unknown>;
-  const fields: PopupField[] = [
-    {
-      key: "firstName",
-      enabled: !!oldFields.firstName,
-      label: "First Name",
-      placeholder: "Your first name",
-      required: false,
-      order: 0,
-    },
-    {
-      key: "phone",
-      enabled: !!oldFields.phone,
-      label: "Phone",
-      placeholder: "Your phone number",
-      required: false,
-      order: 1,
-    },
-    {
-      key: "notes",
-      enabled: !!oldFields.notes,
-      label: "Notes",
-      placeholder: "Anything else?",
-      required: false,
-      order: 2,
-    },
-  ];
+  // normFields handles both the new ordered-array shape and the legacy
+  // boolean map, and migrates the old "firstName" key to "name".
+  const template = popup.template || "classic";
+  // Backwards compatibility: old popups have thankYouUrl but no
+  // submissionSuccessText. Only default the success text when neither an
+  // explicit success text nor a legacy redirect URL is present, so old popups
+  // keep redirecting until they are re-saved in the new builder.
+  const hasSuccessText =
+    typeof popup.submissionSuccessText === "string" &&
+    popup.submissionSuccessText.trim().length > 0;
+  const hasLegacyRedirect =
+    typeof popup.thankYouUrl === "string" &&
+    popup.thankYouUrl.trim().length > 0;
+  const submissionSuccessText = hasSuccessText
+    ? normalizeSuccessText(popup.submissionSuccessText, DEFAULT_SUCCESS_TEXT)
+    : hasLegacyRedirect
+      ? ""
+      : DEFAULT_SUCCESS_TEXT;
 
   return {
     ...popup,
-    template: popup.template || "classic",
+    template,
     folderId: popup.folderId || UNCATEGORIZED_FOLDER_ID,
     buttonStyle: normalizeButtonStyle(popup.buttonStyle),
-    imageSettings: normalizeImageSettings(
-      popup.imageSettings,
-      popup.template || "classic",
-    ),
+    imageSettings: normalizeImageSettings(popup.imageSettings, template),
+    contentStyle: normalizeContentStyle(popup.contentStyle),
     trigger: normalizeTrigger(popup.trigger, popup.id),
-    fields,
+    fields: normFields(popup.fields),
+    submissionSuccessText,
+    thankYouUrl:
+      typeof popup.thankYouUrl === "string" ? popup.thankYouUrl : "",
     style: migratedStyle,
   } as Popup;
 }
@@ -228,9 +210,13 @@ export function toPublicConfig(popup: Popup): PublicPopupConfig {
     buttonText: popup.buttonText,
     imageUrl: popup.imageUrl,
     imageSettings: normalizeImageSettings(popup.imageSettings, popup.template),
+    contentStyle: normalizeContentStyle(popup.contentStyle),
     fields: popup.fields,
     trigger: popup.trigger,
-    thankYouUrl: popup.thankYouUrl,
+    submissionSuccessText:
+      normalizeSuccessText(popup.submissionSuccessText, "") || "",
+    // Legacy redirect target retained only for old popups that set it.
+    thankYouUrl: popup.thankYouUrl || "",
     style: popup.style,
   };
 }

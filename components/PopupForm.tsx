@@ -7,11 +7,22 @@ import type {
   PopupTemplate,
   FieldKey,
   PopupImageSettings,
+  PopupContentStyle,
+  ContentBlockStyle,
   PopupFolder,
   PopupButtonStyle,
 } from "@/lib/types";
-import { DEFAULT_FIELDS, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
-import { defaultButtonStyle, defaultImageSettings } from "@/lib/popup-shape";
+import {
+  DEFAULT_FIELDS,
+  DEFAULT_SUCCESS_TEXT,
+  UNCATEGORIZED_FOLDER_ID,
+} from "@/lib/types";
+import {
+  defaultButtonStyle,
+  defaultContentStyle,
+  defaultImageSettings,
+  SAFE_FONT_FAMILIES,
+} from "@/lib/popup-shape";
 import PopupPreview from "@/components/PopupPreview";
 import ImagePicker from "@/components/ImagePicker";
 
@@ -27,6 +38,7 @@ export interface PopupFormValue {
   buttonText: string;
   imageUrl: string;
   imageSettings: PopupImageSettings;
+  contentStyle: PopupContentStyle;
   folderId: string;
   buttonStyle: PopupButtonStyle;
   fields: PopupField[];
@@ -37,7 +49,8 @@ export interface PopupFormValue {
     showOncePerSession: boolean;
   };
   gcTagId: string;
-  thankYouUrl: string;
+  submissionSuccessText: string;
+  thankYouUrl: string; // legacy redirect, retained for old popups
   allowedDomains: string; // newline/comma separated in the form
   style: { primaryColor: string; buttonColor: string; textColor: string };
 }
@@ -59,6 +72,7 @@ export function emptyForm(): PopupFormValue {
     buttonText: "Submit",
     imageUrl: "",
     imageSettings: defaultImageSettings("classic"),
+    contentStyle: defaultContentStyle(),
     folderId: UNCATEGORIZED_FOLDER_ID,
     buttonStyle: defaultButtonStyle(),
     fields: cloneDefaults(),
@@ -69,6 +83,7 @@ export function emptyForm(): PopupFormValue {
       showOncePerSession: true,
     },
     gcTagId: "",
+    submissionSuccessText: DEFAULT_SUCCESS_TEXT,
     thankYouUrl: "",
     allowedDomains: "",
     style: {
@@ -96,6 +111,7 @@ export function fromPopup(p: Popup): PopupFormValue {
     imageUrl: p.imageUrl,
     imageSettings:
       p.imageSettings || defaultImageSettings(p.template || "classic"),
+    contentStyle: p.contentStyle || defaultContentStyle(),
     folderId: p.folderId || UNCATEGORIZED_FOLDER_ID,
     buttonStyle: p.buttonStyle || defaultButtonStyle(),
     fields,
@@ -106,7 +122,8 @@ export function fromPopup(p: Popup): PopupFormValue {
       showOncePerSession: p.trigger?.showOncePerSession !== false,
     },
     gcTagId: p.gcTagId,
-    thankYouUrl: p.thankYouUrl,
+    submissionSuccessText: p.submissionSuccessText || DEFAULT_SUCCESS_TEXT,
+    thankYouUrl: p.thankYouUrl || "",
     allowedDomains: (p.allowedDomains || []).join("\n"),
     style: {
       primaryColor: p.style?.primaryColor || "#ffffff",
@@ -201,7 +218,7 @@ function TemplateThumb({ kind }: { kind: PopupTemplate }) {
 }
 
 const FIELD_TITLES: Record<FieldKey, string> = {
-  firstName: "First Name",
+  name: "Name",
   phone: "Phone",
   notes: "Notes",
 };
@@ -278,6 +295,19 @@ export default function PopupForm({
     });
   }
 
+  function setContentBlock(
+    block: "headline" | "subHeadline" | "bodyText",
+    patch: Partial<ContentBlockStyle>,
+  ) {
+    setV((prev) => ({
+      ...prev,
+      contentStyle: {
+        ...prev.contentStyle,
+        [block]: { ...prev.contentStyle[block], ...patch },
+      },
+    }));
+  }
+
   function move(idx: number, dir: -1 | 1) {
     setV((prev) => {
       const fields = prev.fields.slice();
@@ -301,6 +331,7 @@ export default function PopupForm({
       buttonText: v.buttonText,
       imageUrl: v.imageUrl,
       imageSettings: v.imageSettings,
+      contentStyle: v.contentStyle,
       folderId: v.folderId,
       fields: v.fields.map((f, i) => ({ ...f, order: i })),
       style: v.style,
@@ -569,12 +600,21 @@ export default function PopupForm({
                 </div>
               </div>
               <div>
-                <label className={label}>Thank-you URL</label>
-                <input
+                <label className={label}>Submission Successful Text</label>
+                <textarea
                   className={input}
-                  value={v.thankYouUrl}
-                  onChange={(e) => set("thankYouUrl", e.target.value)}
+                  rows={2}
+                  value={v.submissionSuccessText}
+                  onChange={(e) =>
+                    set("submissionSuccessText", e.target.value)
+                  }
+                  placeholder={DEFAULT_SUCCESS_TEXT}
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Shown inside the popup after a successful submission. Line
+                  breaks are allowed; the popup no longer redirects to a
+                  thank-you page.
+                </p>
               </div>
             </div>
           </section>
@@ -707,6 +747,53 @@ export default function PopupForm({
                 title="Text color"
                 value={v.style.textColor}
                 onChange={(c) => set("style", { ...v.style, textColor: c })}
+              />
+            </div>
+          </section>
+
+          {/* Typography */}
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-1 font-semibold text-gray-900">Typography</h2>
+            <p className="mb-4 text-sm text-gray-500">
+              Alignment, size and weight for each text block. Sizes are clamped
+              to readable ranges on mobile automatically.
+            </p>
+            <div className="mb-4">
+              <label className="text-xs font-medium text-gray-600">
+                Font family
+              </label>
+              <select
+                className={input}
+                value={v.contentStyle.fontFamily}
+                onChange={(e) =>
+                  set("contentStyle", {
+                    ...v.contentStyle,
+                    fontFamily: e.target.value,
+                  })
+                }
+              >
+                {SAFE_FONT_FAMILIES.map((f) => (
+                  <option key={f} value={f}>
+                    {FONT_LABELS[f] || f}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-4">
+              <ContentBlockControls
+                title="Headline"
+                block={v.contentStyle.headline}
+                onChange={(patch) => setContentBlock("headline", patch)}
+              />
+              <ContentBlockControls
+                title="Sub-headline"
+                block={v.contentStyle.subHeadline}
+                onChange={(patch) => setContentBlock("subHeadline", patch)}
+              />
+              <ContentBlockControls
+                title="Body text"
+                block={v.contentStyle.bodyText}
+                onChange={(patch) => setContentBlock("bodyText", patch)}
               />
             </div>
           </section>
@@ -999,30 +1086,10 @@ export default function PopupForm({
                       {v.buttonStyle.label}
                     </button>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigator.clipboard?.writeText(
-                          `.gc-popup-trigger--${v.id || "popup-id"} { display: ${v.buttonStyle.width === "full" ? "block" : "inline-block"}; width: ${v.buttonStyle.width === "full" ? "100%" : "auto"}; text-align: ${v.buttonStyle.alignment}; background: ${v.buttonStyle.backgroundColor}; color: ${v.buttonStyle.textColor}; border: ${v.buttonStyle.borderWidth}px solid ${v.buttonStyle.borderColor}; border-radius: ${v.buttonStyle.borderRadius}px; font-size: ${v.buttonStyle.fontSize}px; font-weight: ${v.buttonStyle.fontWeight}; padding: ${v.buttonStyle.paddingY}px ${v.buttonStyle.paddingX}px; box-shadow: ${v.buttonStyle.shadow}; cursor: pointer; }\n.gc-popup-trigger--${v.id || "popup-id"}:hover { background: ${v.buttonStyle.hoverBackgroundColor}; }`,
-                        )
-                      }
-                      className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700"
-                    >
-                      Copy CSS
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigator.clipboard?.writeText(
-                          `<button class="gc-popup-trigger--${v.id || "popup-id"}" data-gc-popup-trigger="${v.id || "popup-id"}">${v.buttonStyle.label}</button>`,
-                        )
-                      }
-                      className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700"
-                    >
-                      Copy HTML
-                    </button>
-                  </div>
+                  <ButtonCodeCopy
+                    popupId={v.id || "popup-id"}
+                    buttonStyle={v.buttonStyle}
+                  />
                 </div>
               </>
             )}
@@ -1077,7 +1144,9 @@ export default function PopupForm({
         </div>
 
         {/* ---------- RIGHT: live preview ---------- */}
-        <div className="lg:sticky lg:top-6 lg:self-start">
+        {/* Sticky on desktop so it floats beside the scrolling form; falls back
+            to normal document flow on mobile so it never obstructs the form. */}
+        <div className="lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-auto">
           <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">Live preview</h2>
@@ -1115,6 +1184,164 @@ export default function PopupForm({
         </div>
       </div>
     </form>
+  );
+}
+
+const FONT_LABELS: Record<string, string> = {
+  system: "System default",
+  arial: "Arial",
+  georgia: "Georgia",
+  verdana: "Verdana",
+  "sans-serif": "Sans-serif",
+};
+
+const WEIGHT_OPTIONS: { value: number; label: string }[] = [
+  { value: 300, label: "Light" },
+  { value: 400, label: "Normal" },
+  { value: 500, label: "Medium" },
+  { value: 600, label: "Semibold" },
+  { value: 700, label: "Bold" },
+  { value: 800, label: "Extra bold" },
+];
+
+function ContentBlockControls({
+  title,
+  block,
+  onChange,
+}: {
+  title: string;
+  block: ContentBlockStyle;
+  onChange: (patch: Partial<ContentBlockStyle>) => void;
+}) {
+  const aligns: ContentBlockStyle["align"][] = ["left", "center", "right"];
+  return (
+    <div className="rounded-lg border border-gray-200 p-3">
+      <div className="mb-2 text-sm font-semibold text-gray-900">{title}</div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className="text-xs font-medium text-gray-600">Alignment</label>
+          <div className="mt-1 inline-flex overflow-hidden rounded-lg border border-gray-200 text-xs">
+            {aligns.map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => onChange({ align: a })}
+                className={
+                  "px-3 py-1.5 capitalize " +
+                  (block.align === a
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-gray-600 hover:bg-gray-50")
+                }
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+        </div>
+        <ImageRange
+          label="Size"
+          value={block.fontSize}
+          min={10}
+          max={48}
+          suffix="px"
+          onChange={(fontSize) => onChange({ fontSize })}
+        />
+        <div>
+          <label className="text-xs font-medium text-gray-600">Weight</label>
+          <select
+            className={input}
+            value={block.fontWeight}
+            onChange={(e) => onChange({ fontWeight: Number(e.target.value) })}
+          >
+            {WEIGHT_OPTIONS.map((w) => (
+              <option key={w.value} value={w.value}>
+                {w.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Generate one copyable block containing both the scoped trigger CSS and the
+// HTML snippet. The CSS targets only `.gc-popup-trigger--{popupId}` so it never
+// affects unrelated site buttons. No keys, tag IDs, domains, or submission data
+// are ever included.
+function buildButtonCode(popupId: string, b: PopupButtonStyle): string {
+  const cls = `gc-popup-trigger--${popupId}`;
+  const css =
+    `.${cls} {\n` +
+    `  display: ${b.width === "full" ? "block" : "inline-block"};\n` +
+    `  width: ${b.width === "full" ? "100%" : "auto"};\n` +
+    `  text-align: ${b.alignment};\n` +
+    `  background: ${b.backgroundColor};\n` +
+    `  color: ${b.textColor};\n` +
+    `  border: ${b.borderWidth}px solid ${b.borderColor};\n` +
+    `  border-radius: ${b.borderRadius}px;\n` +
+    `  font-size: ${b.fontSize}px;\n` +
+    `  font-weight: ${b.fontWeight};\n` +
+    `  padding: ${b.paddingY}px ${b.paddingX}px;\n` +
+    `  box-shadow: ${b.shadow};\n` +
+    `  cursor: pointer;\n` +
+    `}\n` +
+    `.${cls}:hover { background: ${b.hoverBackgroundColor}; }`;
+  const html =
+    `<button class="${cls}" data-gc-popup-trigger="${popupId}">` +
+    `${b.label}</button>`;
+  return (
+    `<!-- GC Popup trigger button. Paste this where you want the button to\n` +
+    `     appear on your site. The <style> scopes all rules to this button\n` +
+    `     only, so your other site buttons are unaffected. -->\n` +
+    `<style>\n${css}\n</style>\n${html}`
+  );
+}
+
+function ButtonCodeCopy({
+  popupId,
+  buttonStyle,
+}: {
+  popupId: string;
+  buttonStyle: PopupButtonStyle;
+}) {
+  const [copied, setCopied] = useState(false);
+  const code = buildButtonCode(popupId, buttonStyle);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = code;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-gray-500">
+          Paste this block where you want the button to appear on your site. It
+          includes the scoped button styles and the trigger HTML in one piece.
+        </p>
+        <button
+          type="button"
+          onClick={copy}
+          className="shrink-0 rounded bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+        >
+          {copied ? "Copied!" : "Copy Button Code"}
+        </button>
+      </div>
+      <pre className="max-h-40 overflow-auto rounded-lg bg-gray-900 px-3 py-2.5 text-[11px] leading-relaxed text-gray-100">
+        <code>{code}</code>
+      </pre>
+    </div>
   );
 }
 

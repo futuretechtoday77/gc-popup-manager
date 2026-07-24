@@ -3,17 +3,32 @@ import type {
   PopupField,
   PopupStyle,
   PopupImageSettings,
+  PopupContentStyle,
+  ContentBlockStyle,
+  ContentAlign,
   PopupButtonStyle,
   PopupTemplate,
   PopupTrigger,
   FieldKey,
 } from "./types";
-import { DEFAULT_FIELDS, UNCATEGORIZED_FOLDER_ID } from "./types";
+import {
+  DEFAULT_FIELDS,
+  DEFAULT_SUCCESS_TEXT,
+  UNCATEGORIZED_FOLDER_ID,
+} from "./types";
 import { sanitize, slugify } from "./validate";
 import { nowIso } from "./id";
 
-const FIELD_KEYS: FieldKey[] = ["firstName", "phone", "notes"];
+const FIELD_KEYS: FieldKey[] = ["name", "phone", "notes"];
 const TEMPLATES: PopupTemplate[] = ["classic", "minimal", "slideup", "split"];
+
+// Map any legacy field key to the current one. The user-facing "firstName"
+// field was renamed to "name"; accept both from stored/legacy input.
+function canonicalFieldKey(raw: unknown): FieldKey | null {
+  const k = sanitize(raw, 32);
+  if (k === "firstName") return "name";
+  return (FIELD_KEYS as string[]).includes(k) ? (k as FieldKey) : null;
+}
 
 const MAX_DELAY_SECONDS = 86400;
 export function normalizeTrigger(v: unknown, popupId: string): PopupTrigger {
@@ -54,20 +69,29 @@ function defaultFor(key: FieldKey): PopupField {
       };
 }
 
-// Accept either the new ordered array shape or the legacy boolean map and
-// always return a normalized, fully-populated ordered array of all three
-// known field keys.
+// Accept the new ordered array shape, the legacy boolean map, and legacy
+// firstName keys. Always return a normalized, fully-populated ordered array of
+// all known field keys.
 export function normFields(v: unknown): PopupField[] {
-  // Legacy boolean map { firstName, phone, notes }.
+  // Legacy boolean map { firstName|name, phone, notes }.
   if (v && typeof v === "object" && !Array.isArray(v)) {
     const map = v as Record<string, unknown>;
-    const looksLegacy = FIELD_KEYS.some((k) => typeof map[k] === "boolean");
+    const looksLegacy =
+      typeof map.firstName === "boolean" ||
+      typeof map.name === "boolean" ||
+      typeof map.phone === "boolean" ||
+      typeof map.notes === "boolean";
     if (looksLegacy) {
+      const legacyLookup: Record<FieldKey, unknown> = {
+        name: map.name !== undefined ? map.name : map.firstName,
+        phone: map.phone,
+        notes: map.notes,
+      };
       return FIELD_KEYS.map((key, i) => {
         const base = defaultFor(key);
         return {
           ...base,
-          enabled: boolField(map[key], base.enabled),
+          enabled: boolField(legacyLookup[key], base.enabled),
           order: i,
         };
       });
@@ -79,8 +103,8 @@ export function normFields(v: unknown): PopupField[] {
   for (const raw of arr) {
     if (!raw || typeof raw !== "object") continue;
     const r = raw as Record<string, unknown>;
-    const key = sanitize(r.key, 32) as FieldKey;
-    if (!FIELD_KEYS.includes(key)) continue;
+    const key = canonicalFieldKey(r.key);
+    if (!key) continue;
     const base = defaultFor(key);
     const orderNum = Number(r.order);
     byKey.set(key, {
@@ -154,6 +178,63 @@ export function normalizeImageSettings(
     scale: clamp(raw.scale, 50, 150, defaults.scale),
     desktopHeight: clamp(raw.desktopHeight, 100, 360, defaults.desktopHeight),
     mobileHeight: clamp(raw.mobileHeight, 100, 260, defaults.mobileHeight),
+  };
+}
+
+// ---- Content typography ----
+
+// Only safe, self-hosting-free web fonts are allowed. Keys map to CSS stacks
+// in the renderer; here we just validate the key.
+export const SAFE_FONT_FAMILIES = [
+  "system",
+  "arial",
+  "georgia",
+  "verdana",
+  "sans-serif",
+] as const;
+export type SafeFontFamily = (typeof SAFE_FONT_FAMILIES)[number];
+
+export function defaultContentStyle(): PopupContentStyle {
+  return {
+    headline: { align: "center", fontSize: 22, fontWeight: 700 },
+    subHeadline: { align: "left", fontSize: 14, fontWeight: 400 },
+    bodyText: { align: "left", fontSize: 13, fontWeight: 400 },
+    fontFamily: "system",
+  };
+}
+
+function normAlign(v: unknown, fallback: ContentAlign): ContentAlign {
+  return v === "left" || v === "center" || v === "right" ? v : fallback;
+}
+
+function normBlock(
+  v: unknown,
+  defaults: ContentBlockStyle,
+): ContentBlockStyle {
+  const raw = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  const clamp = (value: unknown, min: number, max: number, fb: number) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(min, Math.min(max, Math.round(n))) : fb;
+  };
+  return {
+    align: normAlign(raw.align, defaults.align),
+    // Desktop-authorable range; the renderer clamps further on mobile.
+    fontSize: clamp(raw.fontSize, 10, 48, defaults.fontSize),
+    fontWeight: clamp(raw.fontWeight, 300, 900, defaults.fontWeight),
+  };
+}
+
+export function normalizeContentStyle(v: unknown): PopupContentStyle {
+  const raw = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  const defaults = defaultContentStyle();
+  const family = sanitize(raw.fontFamily, 32).toLowerCase();
+  return {
+    headline: normBlock(raw.headline, defaults.headline),
+    subHeadline: normBlock(raw.subHeadline, defaults.subHeadline),
+    bodyText: normBlock(raw.bodyText, defaults.bodyText),
+    fontFamily: (SAFE_FONT_FAMILIES as readonly string[]).includes(family)
+      ? family
+      : defaults.fontFamily,
   };
 }
 
@@ -231,6 +312,21 @@ function normStatus(v: unknown): Popup["status"] {
   return "draft";
 }
 
+// Allow simple multi-line success text. Keep newlines, strip other control
+// characters, and cap length. The renderer escapes and converts \n to <br>.
+export function normalizeSuccessText(v: unknown, fallback: string): string {
+  if (v === undefined || v === null) return fallback;
+  const str = String(v)
+    // eslint-disable-next-line no-control-regex
+    .replace(/\r\n?/g, "\n")
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .slice(0, 500)
+    .trim();
+  return str;
+}
+
 function normDomains(v: unknown): string[] {
   let list: unknown[] = [];
   if (Array.isArray(v)) list = v;
@@ -261,11 +357,16 @@ export function buildNewPopup(input: Record<string, unknown>): Popup {
       input.imageSettings,
       normTemplate(input.template),
     ),
+    contentStyle: normalizeContentStyle(input.contentStyle),
     folderId: sanitize(input.folderId, 100) || UNCATEGORIZED_FOLDER_ID,
     buttonStyle: normalizeButtonStyle(input.buttonStyle),
     fields: normFields(input.fields),
     trigger: normalizeTrigger(input.trigger, id),
     gcTagId: sanitize(input.gcTagId, 200),
+    submissionSuccessText: normalizeSuccessText(
+      input.submissionSuccessText,
+      DEFAULT_SUCCESS_TEXT,
+    ),
     thankYouUrl: sanitize(input.thankYouUrl, 2000),
     allowedDomains: normDomains(input.allowedDomains),
     style: normStyle(input.style),
@@ -320,11 +421,23 @@ export function applyPopupUpdate(
           existing.imageSettings,
           has("template") ? normTemplate(input.template) : existing.template,
         ),
+    contentStyle: has("contentStyle")
+      ? normalizeContentStyle(input.contentStyle)
+      : normalizeContentStyle(existing.contentStyle),
     fields: has("fields") ? normFields(input.fields) : existing.fields,
     trigger: has("trigger")
       ? normalizeTrigger(input.trigger, existing.id)
       : normalizeTrigger(existing.trigger, existing.id),
     gcTagId: has("gcTagId") ? sanitize(input.gcTagId, 200) : existing.gcTagId,
+    submissionSuccessText: has("submissionSuccessText")
+      ? normalizeSuccessText(
+          input.submissionSuccessText,
+          existing.submissionSuccessText || DEFAULT_SUCCESS_TEXT,
+        )
+      : normalizeSuccessText(
+          existing.submissionSuccessText,
+          DEFAULT_SUCCESS_TEXT,
+        ),
     thankYouUrl: has("thankYouUrl")
       ? sanitize(input.thankYouUrl, 2000)
       : existing.thankYouUrl,
