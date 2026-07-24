@@ -3,6 +3,8 @@ import type {
   PopupField,
   PopupStyle,
   PopupImageSettings,
+  PopupButtonStyle,
+  UNCATEGORIZED_FOLDER_ID,
   PopupTemplate,
   PopupTrigger,
   FieldKey,
@@ -156,6 +158,65 @@ export function normalizeImageSettings(
   };
 }
 
+export function defaultButtonStyle(): PopupButtonStyle {
+  return {
+    label: "Get started",
+    backgroundColor: "#22c55e",
+    textColor: "#ffffff",
+    hoverBackgroundColor: "#16a34a",
+    borderColor: "#22c55e",
+    borderWidth: 0,
+    borderRadius: 8,
+    fontSize: 16,
+    fontWeight: 600,
+    paddingX: 20,
+    paddingY: 12,
+    shadow: "0 4px 12px rgba(0,0,0,.12)",
+    width: "auto",
+    alignment: "center",
+  };
+}
+
+export function normalizeButtonStyle(v: unknown): PopupButtonStyle {
+  const raw = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  const defaults = defaultButtonStyle();
+  const clamp = (
+    value: unknown,
+    min: number,
+    max: number,
+    fallback: number,
+  ) => {
+    const n = Number(value);
+    return Number.isFinite(n)
+      ? Math.max(min, Math.min(max, Math.round(n)))
+      : fallback;
+  };
+  const color = (value: unknown, fallback: string) =>
+    sanitize(value, 80) || fallback;
+  return {
+    label: sanitize(raw.label, 100) || defaults.label,
+    backgroundColor: color(raw.backgroundColor, defaults.backgroundColor),
+    textColor: color(raw.textColor, defaults.textColor),
+    hoverBackgroundColor: color(
+      raw.hoverBackgroundColor,
+      defaults.hoverBackgroundColor,
+    ),
+    borderColor: color(raw.borderColor, defaults.borderColor),
+    borderWidth: clamp(raw.borderWidth, 0, 8, defaults.borderWidth),
+    borderRadius: clamp(raw.borderRadius, 0, 40, defaults.borderRadius),
+    fontSize: clamp(raw.fontSize, 10, 32, defaults.fontSize),
+    fontWeight: clamp(raw.fontWeight, 400, 900, defaults.fontWeight),
+    paddingX: clamp(raw.paddingX, 0, 60, defaults.paddingX),
+    paddingY: clamp(raw.paddingY, 0, 40, defaults.paddingY),
+    shadow: sanitize(raw.shadow, 160) || defaults.shadow,
+    width: raw.width === "full" ? "full" : "auto",
+    alignment:
+      raw.alignment === "left" || raw.alignment === "right"
+        ? raw.alignment
+        : "center",
+  };
+}
+
 function normStyle(v: unknown): PopupStyle {
   const s = (v || {}) as Record<string, unknown>;
   return {
@@ -201,6 +262,8 @@ export function buildNewPopup(input: Record<string, unknown>): Popup {
       input.imageSettings,
       normTemplate(input.template),
     ),
+    folderId: sanitize(input.folderId, 100) || UNCATEGORIZED_FOLDER_ID,
+    buttonStyle: normalizeButtonStyle(input.buttonStyle),
     fields: normFields(input.fields),
     trigger: normalizeTrigger(input.trigger, id),
     gcTagId: sanitize(input.gcTagId, 200),
@@ -243,6 +306,12 @@ export function applyPopupUpdate(
     imageUrl: has("imageUrl")
       ? sanitize(input.imageUrl, 2000)
       : existing.imageUrl,
+    folderId: has("folderId")
+      ? sanitize(input.folderId, 100) || UNCATEGORIZED_FOLDER_ID
+      : existing.folderId || UNCATEGORIZED_FOLDER_ID,
+    buttonStyle: has("buttonStyle")
+      ? normalizeButtonStyle(input.buttonStyle)
+      : normalizeButtonStyle(existing.buttonStyle),
     imageSettings: has("imageSettings")
       ? normalizeImageSettings(
           input.imageSettings,

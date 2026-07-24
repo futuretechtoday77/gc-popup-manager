@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Protected from '@/components/Protected';
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Protected from "@/components/Protected";
 import PopupForm, {
   fromPopup,
   toPayload,
   type PopupFormValue,
-} from '@/components/PopupForm';
-import CopyBox from '@/components/CopyBox';
-import { StatusBadge, Spinner } from '@/components/ui';
-import { api } from '@/lib/client';
-import type { Popup, Submission } from '@/lib/types';
+} from "@/components/PopupForm";
+import CopyBox from "@/components/CopyBox";
+import { StatusBadge, Spinner } from "@/components/ui";
+import { api } from "@/lib/client";
+import type { Popup, Submission } from "@/lib/types";
 
 function EditInner() {
   const params = useParams<{ id: string }>();
@@ -19,7 +19,7 @@ function EditInner() {
   const id = params.id;
 
   const [initial, setInitial] = useState<PopupFormValue | null>(null);
-  const [snippet, setSnippet] = useState('');
+  const [snippet, setSnippet] = useState("");
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -49,30 +49,38 @@ function EditInner() {
     setMessage(null);
     const res = await api<{ success: boolean; error?: string }>(
       `/api/admin/popups/${id}`,
-      { method: 'PUT', body: JSON.stringify(toPayload(v)) },
+      { method: "PUT", body: JSON.stringify(toPayload(v)) },
     );
     setSubmitting(false);
     if (res.ok) {
-      setMessage('Saved.');
+      setMessage("Saved.");
       setTimeout(() => setMessage(null), 2000);
     } else {
-      setError(res.data?.error || 'Failed to save');
+      setError(res.data?.error || "Failed to save");
     }
   }
 
   async function onDelete() {
-    if (!confirm('Set this popup to inactive?')) return;
-    const res = await api(`/api/admin/popups/${id}`, { method: 'DELETE' });
-    if (res.ok) router.push('/admin/popups');
+    if (!confirm("Set this popup to inactive?")) return;
+    const res = await api(`/api/admin/popups/${id}`, { method: "DELETE" });
+    if (res.ok) router.push("/admin/popups");
+  }
+
+  async function onClone() {
+    const res = await api<{ popup?: Popup }>(`/api/admin/popups/${id}/clone`, {
+      method: "POST",
+    });
+    if (res.ok && res.data?.popup)
+      router.push(`/admin/popups/${res.data.popup.id}`);
   }
 
   if (loading) return <Spinner />;
   if (!initial)
     return (
       <div className="text-sm text-gray-500">
-        Popup not found.{' '}
+        Popup not found.{" "}
         <button
-          onClick={() => router.push('/admin/popups')}
+          onClick={() => router.push("/admin/popups")}
           className="text-blue-600 hover:underline"
         >
           Back to popups
@@ -89,12 +97,20 @@ function EditInner() {
           <h1 className="text-2xl font-bold text-gray-900">{initial.name}</h1>
           <p className="text-sm text-gray-400">{initial.id}</p>
         </div>
-        <button
-          onClick={onDelete}
-          className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-        >
-          Deactivate
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={onClone}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Clone
+          </button>
+          <button
+            onClick={onDelete}
+            className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+          >
+            Deactivate
+          </button>
+        </div>
       </div>
 
       <div className="mt-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -143,7 +159,7 @@ function EditInner() {
                   <tr key={s.id} className="border-t border-gray-100">
                     <td className="px-5 py-2.5 text-gray-900">{s.email}</td>
                     <td className="px-5 py-2.5 text-gray-600">
-                      {s.firstName || '—'}
+                      {s.firstName || "—"}
                     </td>
                     <td className="px-5 py-2.5">
                       <StatusBadge status={s.status} />

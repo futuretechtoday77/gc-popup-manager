@@ -1,6 +1,17 @@
 import { Redis } from "@upstash/redis";
-import type { Popup, PopupField, Submission, PublicPopupConfig } from "./types";
-import { normalizeImageSettings, normalizeTrigger } from "./popup-shape";
+import type {
+  Popup,
+  PopupField,
+  Submission,
+  PublicPopupConfig,
+  PopupFolder,
+} from "./types";
+import { UNCATEGORIZED_FOLDER_ID, UNCATEGORIZED_FOLDER_NAME } from "./types";
+import {
+  normalizeButtonStyle,
+  normalizeImageSettings,
+  normalizeTrigger,
+} from "./popup-shape";
 
 let _redis: Redis | null = null;
 
@@ -25,6 +36,8 @@ export const keys = {
   submission: (id: string) => `submission:${id}`,
   queuePending: () => `queue:pending`,
   queueFailed: () => `queue:failed`,
+  folder: (id: string) => `folder:${id}`,
+  foldersIndex: () => `folders:index`,
 };
 
 // The Upstash client auto-serializes/deserializes JSON. When a value was
@@ -59,6 +72,8 @@ export function migratePopupFields(popup: any): Popup {
     return {
       ...popup,
       template: popup.template || "classic",
+      folderId: popup.folderId || UNCATEGORIZED_FOLDER_ID,
+      buttonStyle: normalizeButtonStyle(popup.buttonStyle),
       imageSettings: normalizeImageSettings(
         popup.imageSettings,
         popup.template || "classic",
@@ -99,6 +114,8 @@ export function migratePopupFields(popup: any): Popup {
   return {
     ...popup,
     template: popup.template || "classic",
+    folderId: popup.folderId || UNCATEGORIZED_FOLDER_ID,
+    buttonStyle: normalizeButtonStyle(popup.buttonStyle),
     imageSettings: normalizeImageSettings(
       popup.imageSettings,
       popup.template || "classic",
@@ -107,6 +124,73 @@ export function migratePopupFields(popup: any): Popup {
     fields,
     style: migratedStyle,
   } as Popup;
+}
+
+export function normalizeFolder(folder: any): PopupFolder | null {
+  if (!folder || typeof folder !== "object") return null;
+  const id = String(folder.id || "").trim();
+  const name = String(folder.name || "").trim();
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    createdAt: String(folder.createdAt || new Date().toISOString()),
+    updatedAt: String(
+      folder.updatedAt || folder.createdAt || new Date().toISOString(),
+    ),
+  };
+}
+
+export function uncategorizedFolder(): PopupFolder {
+  const now = new Date().toISOString();
+  return {
+    id: UNCATEGORIZED_FOLDER_ID,
+    name: UNCATEGORIZED_FOLDER_NAME,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export async function getFolder(id: string): Promise<PopupFolder | null> {
+  if (id === UNCATEGORIZED_FOLDER_ID) return uncategorizedFolder();
+  const redis = getRedis();
+  return normalizeFolder(coerce(await redis.get(keys.folder(id))));
+}
+
+export async function getAllFolders(): Promise<PopupFolder[]> {
+  const redis = getRedis();
+  const ids = (await redis.smembers(keys.foldersIndex())) as string[];
+  const folders = await Promise.all((ids || []).map((id) => getFolder(id)));
+  const out = folders.filter((f): f is PopupFolder => f !== null);
+  out.unshift(uncategorizedFolder());
+  return out;
+}
+
+export async function saveFolder(folder: PopupFolder): Promise<void> {
+  const redis = getRedis();
+  await redis.set(keys.folder(folder.id), folder);
+  await redis.sadd(keys.foldersIndex(), folder.id);
+}
+
+export async function deleteFolderAndMovePopups(
+  folderId: string,
+): Promise<void> {
+  const redis = getRedis();
+  const ids = (await redis.smembers(keys.popupsIndex())) as string[];
+  const popups = await Promise.all((ids || []).map((id) => getPopup(id)));
+  await Promise.all(
+    popups
+      .filter((p): p is Popup => !!p && p.folderId === folderId)
+      .map((p) =>
+        savePopup({
+          ...p,
+          folderId: UNCATEGORIZED_FOLDER_ID,
+          updatedAt: new Date().toISOString(),
+        }),
+      ),
+  );
+  await redis.del(keys.folder(folderId));
+  await redis.srem(keys.foldersIndex(), folderId);
 }
 
 // ---- Popup ops ----

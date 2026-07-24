@@ -32,6 +32,33 @@ export interface PopupStyle {
   textColor: string; // body + headline text
 }
 
+export interface PopupButtonStyle {
+  label: string;
+  backgroundColor: string;
+  textColor: string;
+  hoverBackgroundColor: string;
+  borderColor: string;
+  borderWidth: number;
+  borderRadius: number;
+  fontSize: number;
+  fontWeight: number;
+  paddingX: number;
+  paddingY: number;
+  shadow: string;
+  width: "auto" | "full";
+  alignment: "left" | "center" | "right";
+}
+
+export interface PopupFolder {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const UNCATEGORIZED_FOLDER_ID = "uncategorized";
+export const UNCATEGORIZED_FOLDER_NAME = "Uncategorized";
+
 export interface Popup {
   id: string; // human-readable slug e.g. "rife-main-optin"
   name: string;
@@ -44,6 +71,8 @@ export interface Popup {
   buttonText: string;
   imageUrl: string;
   imageSettings: PopupImageSettings;
+  folderId: string;
+  buttonStyle: PopupButtonStyle;
   fields: PopupField[];
   trigger: PopupTrigger;
   gcTagId: string; // NEVER exposed publicly

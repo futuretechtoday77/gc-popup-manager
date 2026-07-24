@@ -225,3 +225,13 @@ admin live preview and the public embed use the same crop and sizing rules.
 If a configured image cannot load, the preview and embed show an explicit
 “Image unavailable” state rather than leaving an empty area. Existing popup
 records without image settings automatically receive safe template defaults.
+
+## Popup cloning and folders
+
+Admins can clone a popup from its list row or editor. A clone copies the popup design, ordered fields, trigger settings, image URL and framing, button styling, styles, allowed domains, GC tag assignment, and folder. It never copies submissions or processing history. Clones receive a unique ID, a `(Copy)` name, fresh timestamps, and `draft` status.
+
+Popups can be grouped into admin-only folders. Legacy records without a folder appear in **Uncategorized**. Folder deletion never deletes popups: assigned popups move to Uncategorized. Folder metadata is never returned by the public config endpoint.
+
+## Trigger button styler
+
+For button-activated popups, the builder can generate a scoped trigger button style and ready-to-paste HTML. The generated CSS targets only `.gc-popup-trigger--{popupId}` and the HTML includes both that class and `data-gc-popup-trigger="{popupId}"`, so unrelated site buttons are not affected. Use the builder's **Copy CSS** and **Copy HTML** actions after choosing label, colors, width, alignment, font size, and radius.

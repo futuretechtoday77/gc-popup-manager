@@ -1,15 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   Popup,
   PopupField,
   PopupTemplate,
   FieldKey,
   PopupImageSettings,
+  PopupFolder,
+  PopupButtonStyle,
 } from "@/lib/types";
-import { DEFAULT_FIELDS } from "@/lib/types";
-import { defaultImageSettings } from "@/lib/popup-shape";
+import { DEFAULT_FIELDS, UNCATEGORIZED_FOLDER_ID } from "@/lib/types";
+import { defaultButtonStyle, defaultImageSettings } from "@/lib/popup-shape";
 import PopupPreview from "@/components/PopupPreview";
 import ImagePicker from "@/components/ImagePicker";
 
@@ -25,6 +27,8 @@ export interface PopupFormValue {
   buttonText: string;
   imageUrl: string;
   imageSettings: PopupImageSettings;
+  folderId: string;
+  buttonStyle: PopupButtonStyle;
   fields: PopupField[];
   trigger: {
     type: "button" | "delay" | "exitIntent";
@@ -55,6 +59,8 @@ export function emptyForm(): PopupFormValue {
     buttonText: "Submit",
     imageUrl: "",
     imageSettings: defaultImageSettings("classic"),
+    folderId: UNCATEGORIZED_FOLDER_ID,
+    buttonStyle: defaultButtonStyle(),
     fields: cloneDefaults(),
     trigger: {
       type: "button",
@@ -90,6 +96,8 @@ export function fromPopup(p: Popup): PopupFormValue {
     imageUrl: p.imageUrl,
     imageSettings:
       p.imageSettings || defaultImageSettings(p.template || "classic"),
+    folderId: p.folderId || UNCATEGORIZED_FOLDER_ID,
+    buttonStyle: p.buttonStyle || defaultButtonStyle(),
     fields,
     trigger: {
       type: p.trigger?.type || "button",
@@ -211,6 +219,33 @@ export default function PopupForm({
 }) {
   const [v, setV] = useState<PopupFormValue>(initial);
   const [device, setDevice] = useState<"mobile" | "desktop">("mobile");
+  const [folders, setFolders] = useState<PopupFolder[]>([]);
+  const [newFolderName, setNewFolderName] = useState("");
+
+  useEffect(() => {
+    fetch("/api/admin/folders")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data?.folders) setFolders(data.folders);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function createFolder() {
+    const name = newFolderName.trim();
+    if (!name) return;
+    const response = await fetch("/api/admin/folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const data = await response.json().catch(() => null);
+    if (response.ok && data?.folder) {
+      setFolders((previous) => [...previous, data.folder]);
+      set("folderId", data.folder.id);
+      setNewFolderName("");
+    }
+  }
 
   function set<K extends keyof PopupFormValue>(key: K, val: PopupFormValue[K]) {
     setV((prev) => ({ ...prev, [key]: val }));
@@ -266,6 +301,7 @@ export default function PopupForm({
       buttonText: v.buttonText,
       imageUrl: v.imageUrl,
       imageSettings: v.imageSettings,
+      folderId: v.folderId,
       fields: v.fields.map((f, i) => ({ ...f, order: i })),
       style: v.style,
     }),
@@ -495,6 +531,43 @@ export default function PopupForm({
                   )}
                 </div>
               </div>
+              <div className="md:col-span-2">
+                <label className={label}>Folder</label>
+                <div className="mt-1 flex gap-2">
+                  <select
+                    className={input + " mt-0"}
+                    value={v.folderId}
+                    onChange={(e) => set("folderId", e.target.value)}
+                  >
+                    {(folders.length
+                      ? folders
+                      : [
+                          {
+                            id: UNCATEGORIZED_FOLDER_ID,
+                            name: "Uncategorized",
+                          } as PopupFolder,
+                        ]
+                    ).map((folder) => (
+                      <option key={folder.id} value={folder.id}>
+                        {folder.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className={input + " mt-0 max-w-[180px]"}
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    placeholder="New folder"
+                  />
+                  <button
+                    type="button"
+                    onClick={createFolder}
+                    className="shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Create
+                  </button>
+                </div>
+              </div>
               <div>
                 <label className={label}>Thank-you URL</label>
                 <input
@@ -718,6 +791,239 @@ export default function PopupForm({
                   </code>{" "}
                   to a button.
                 </p>
+                <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <h3 className="text-sm font-semibold text-gray-800">
+                    Trigger button styler
+                  </h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    These styles apply only to the generated trigger class, not
+                    to unrelated site buttons.
+                  </p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">
+                        Label
+                      </label>
+                      <input
+                        className={input}
+                        value={v.buttonStyle.label}
+                        onChange={(e) =>
+                          set("buttonStyle", {
+                            ...v.buttonStyle,
+                            label: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <ColorField
+                      title="Background"
+                      value={v.buttonStyle.backgroundColor}
+                      onChange={(value) =>
+                        set("buttonStyle", {
+                          ...v.buttonStyle,
+                          backgroundColor: value,
+                        })
+                      }
+                    />
+                    <ColorField
+                      title="Text color"
+                      value={v.buttonStyle.textColor}
+                      onChange={(value) =>
+                        set("buttonStyle", {
+                          ...v.buttonStyle,
+                          textColor: value,
+                        })
+                      }
+                    />
+                    <ColorField
+                      title="Hover background"
+                      value={v.buttonStyle.hoverBackgroundColor}
+                      onChange={(value) =>
+                        set("buttonStyle", {
+                          ...v.buttonStyle,
+                          hoverBackgroundColor: value,
+                        })
+                      }
+                    />
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">
+                        Width
+                      </label>
+                      <select
+                        className={input}
+                        value={v.buttonStyle.width}
+                        onChange={(e) =>
+                          set("buttonStyle", {
+                            ...v.buttonStyle,
+                            width: e.target.value as PopupButtonStyle["width"],
+                          })
+                        }
+                      >
+                        <option value="auto">Auto</option>
+                        <option value="full">Full width</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">
+                        Alignment
+                      </label>
+                      <select
+                        className={input}
+                        value={v.buttonStyle.alignment}
+                        onChange={(e) =>
+                          set("buttonStyle", {
+                            ...v.buttonStyle,
+                            alignment: e.target
+                              .value as PopupButtonStyle["alignment"],
+                          })
+                        }
+                      >
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </div>
+                    <ImageRange
+                      label="Font size"
+                      value={v.buttonStyle.fontSize}
+                      min={10}
+                      max={32}
+                      suffix="px"
+                      onChange={(fontSize) =>
+                        set("buttonStyle", { ...v.buttonStyle, fontSize })
+                      }
+                    />
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">
+                        Font weight
+                      </label>
+                      <select
+                        className={input}
+                        value={v.buttonStyle.fontWeight}
+                        onChange={(e) =>
+                          set("buttonStyle", {
+                            ...v.buttonStyle,
+                            fontWeight: Number(e.target.value),
+                          })
+                        }
+                      >
+                        <option value={400}>Normal</option>
+                        <option value={500}>Medium</option>
+                        <option value={600}>Semibold</option>
+                        <option value={700}>Bold</option>
+                        <option value={800}>Extra bold</option>
+                      </select>
+                    </div>
+                    <ColorField
+                      title="Border color"
+                      value={v.buttonStyle.borderColor}
+                      onChange={(borderColor) =>
+                        set("buttonStyle", { ...v.buttonStyle, borderColor })
+                      }
+                    />
+                    <ImageRange
+                      label="Border width"
+                      value={v.buttonStyle.borderWidth}
+                      min={0}
+                      max={8}
+                      suffix="px"
+                      onChange={(borderWidth) =>
+                        set("buttonStyle", { ...v.buttonStyle, borderWidth })
+                      }
+                    />
+                    <ImageRange
+                      label="Radius"
+                      value={v.buttonStyle.borderRadius}
+                      min={0}
+                      max={40}
+                      suffix="px"
+                      onChange={(borderRadius) =>
+                        set("buttonStyle", { ...v.buttonStyle, borderRadius })
+                      }
+                    />
+                    <ImageRange
+                      label="Padding X"
+                      value={v.buttonStyle.paddingX}
+                      min={0}
+                      max={60}
+                      suffix="px"
+                      onChange={(paddingX) =>
+                        set("buttonStyle", { ...v.buttonStyle, paddingX })
+                      }
+                    />
+                    <ImageRange
+                      label="Padding Y"
+                      value={v.buttonStyle.paddingY}
+                      min={0}
+                      max={40}
+                      suffix="px"
+                      onChange={(paddingY) =>
+                        set("buttonStyle", { ...v.buttonStyle, paddingY })
+                      }
+                    />
+                    <div>
+                      <label className="text-xs font-medium text-gray-600">
+                        Shadow
+                      </label>
+                      <input
+                        className={input}
+                        value={v.buttonStyle.shadow}
+                        onChange={(e) =>
+                          set("buttonStyle", {
+                            ...v.buttonStyle,
+                            shadow: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div
+                    className="mt-4 flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-white p-4"
+                    style={{ textAlign: v.buttonStyle.alignment }}
+                  >
+                    <button
+                      type="button"
+                      className="inline-block"
+                      style={{
+                        background: v.buttonStyle.backgroundColor,
+                        color: v.buttonStyle.textColor,
+                        border: `${v.buttonStyle.borderWidth}px solid ${v.buttonStyle.borderColor}`,
+                        borderRadius: v.buttonStyle.borderRadius,
+                        fontSize: v.buttonStyle.fontSize,
+                        fontWeight: v.buttonStyle.fontWeight,
+                        padding: `${v.buttonStyle.paddingY}px ${v.buttonStyle.paddingX}px`,
+                        boxShadow: v.buttonStyle.shadow,
+                        width: v.buttonStyle.width === "full" ? "100%" : "auto",
+                      }}
+                    >
+                      {v.buttonStyle.label}
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigator.clipboard?.writeText(
+                          `.gc-popup-trigger--${v.id || "popup-id"} { display: ${v.buttonStyle.width === "full" ? "block" : "inline-block"}; width: ${v.buttonStyle.width === "full" ? "100%" : "auto"}; text-align: ${v.buttonStyle.alignment}; background: ${v.buttonStyle.backgroundColor}; color: ${v.buttonStyle.textColor}; border: ${v.buttonStyle.borderWidth}px solid ${v.buttonStyle.borderColor}; border-radius: ${v.buttonStyle.borderRadius}px; font-size: ${v.buttonStyle.fontSize}px; font-weight: ${v.buttonStyle.fontWeight}; padding: ${v.buttonStyle.paddingY}px ${v.buttonStyle.paddingX}px; box-shadow: ${v.buttonStyle.shadow}; cursor: pointer; }\n.gc-popup-trigger--${v.id || "popup-id"}:hover { background: ${v.buttonStyle.hoverBackgroundColor}; }`,
+                        )
+                      }
+                      className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700"
+                    >
+                      Copy CSS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigator.clipboard?.writeText(
+                          `<button class="gc-popup-trigger--${v.id || "popup-id"}" data-gc-popup-trigger="${v.id || "popup-id"}">${v.buttonStyle.label}</button>`,
+                        )
+                      }
+                      className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700"
+                    >
+                      Copy HTML
+                    </button>
+                  </div>
+                </div>
               </>
             )}
             {v.trigger.type === "delay" && (
