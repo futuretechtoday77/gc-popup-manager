@@ -11,7 +11,7 @@ const BUILD_POPUP_SRC = buildPopup.toString();
 // Self-contained, dependency-free embed script. Served as application/javascript.
 // Reads data-popup-id from its own <script> tag, fetches the public config,
 // renders the selected template via the shared buildPopup(), and posts to
-// /api/submit. Respects field order, per-session dismiss/show, and a 1.5s delay.
+// /api/submit. Respects field order, per-session dismiss/show, and configured button, delayed, or desktop exit-intent triggers.
 const SCRIPT = String.raw`(function () {
   "use strict";
 
@@ -175,7 +175,8 @@ const SCRIPT = String.raw`(function () {
   window.GCPopup.open = function () { launch(true); };
   window.GCPopup.close = teardown;
 
-  function schedule() { setTimeout(function () { launch(false); }, 1500); }
+  function bind(selector) { if (!selector) return; var nodes; try { nodes = document.querySelectorAll(selector); } catch (e) { return; } for (var i = 0; i < nodes.length; i++) { var node = nodes[i]; if (node.getAttribute("data-gcpm-bound-" + popupId)) continue; node.setAttribute("data-gcpm-bound-" + popupId, "1"); node.addEventListener("click", function (e) { e.preventDefault(); launch(false); }); } }
+  function schedule() { fetchConfig(function (err, cfg) { if (err || !cfg) return; STATE.cfg = cfg; var t = cfg.trigger || { type: "button", delaySeconds: 30 }; if (t.type === "button") { bind('[data-gc-popup-trigger="' + popupId + '"]'); bind(t.buttonSelector); return; } if (t.type === "delay") { var seconds = Math.max(1, Math.min(86400, Number(t.delaySeconds) || 30)); setTimeout(function () { launch(false); }, seconds * 1000); return; } if (t.type === "exitIntent" && !("ontouchstart" in window) && !(navigator.maxTouchPoints > 0)) { document.addEventListener("mouseleave", function (e) { if (e.clientY <= 20) launch(false); }, { once: true }); } }); }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", schedule);
   } else {
