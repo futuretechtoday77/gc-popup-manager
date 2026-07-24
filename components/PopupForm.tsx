@@ -9,6 +9,7 @@ import type {
 } from '@/lib/types';
 import { DEFAULT_FIELDS } from '@/lib/types';
 import PopupPreview from '@/components/PopupPreview';
+import ImagePicker from '@/components/ImagePicker';
 
 export interface PopupFormValue {
   id: string;
@@ -332,15 +333,12 @@ export default function PopupForm({
                 </div>
                 <div>
                   <label className={label}>
-                    Image URL{' '}
-                    <span className="text-gray-400">
-                      (not used in Minimal)
-                    </span>
+                    Image{' '}
+                    <span className="text-gray-400">(not used in Minimal)</span>
                   </label>
-                  <input
-                    className={input}
+                  <ImagePicker
                     value={v.imageUrl}
-                    onChange={(e) => set('imageUrl', e.target.value)}
+                    onChange={(url) => set('imageUrl', url)}
                   />
                 </div>
               </div>

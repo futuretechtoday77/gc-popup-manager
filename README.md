@@ -43,6 +43,38 @@ All state lives in Upstash Redis. There is no SQL database.
 | `submission:{id}` | string (JSON) | One submission |
 | `queue:pending` | list | Work queue (RPUSH / LPOP) |
 | `queue:failed` | set | Submissions that hit max retries |
+| `uploads:index` | list | Uploaded image records (newest first) |
+
+
+## Image Storage (Vercel Blob)
+
+Uploaded images in the popup builder are stored in **Vercel Blob**, Vercel's
+built-in object storage. You need to create a Blob store and add the token
+before image upload will work.
+
+### Setup
+
+1. Go to your [Vercel dashboard](https://vercel.com/dashboard) → **Storage**.
+2. Click **Create Database** and choose **Blob**.
+3. Give it a name (e.g. `gc-popup-images`) and click **Create**.
+4. Open the store → **\.env.local** tab and copy the `BLOB_READ_WRITE_TOKEN` value.
+5. Add it to your project's environment variables in Vercel → **Settings → Environment Variables**:
+
+   ```
+   BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+   ```
+
+6. Re-deploy (or trigger a new build) for the variable to take effect.
+
+### Redis index
+
+Every successful upload stores a JSON record in Redis under the list key
+`uploads:index` so the library modal can list past images. No extra setup
+needed — the same Upstash Redis instance is reused.
+
+| Redis key | Type | Purpose |
+| --- | --- | --- |
+| `uploads:index` | list | JSON records for each uploaded image (newest first) |
 
 ## Environment variables
 
@@ -56,6 +88,7 @@ All state lives in Upstash Redis. There is no SQL database.
 | `JWT_SECRET` | yes | Secret used to sign admin JWTs |
 | `CRON_SECRET` | recommended | Shared secret protecting the cron endpoint |
 | `NEXT_PUBLIC_APP_URL` | optional | Public origin used when building embed snippets (auto-detected from request headers if omitted) |
+| `BLOB_READ_WRITE_TOKEN` | yes | Vercel Blob store token for image uploads (see Image Storage section) |
 
 Copy `.env.example` to `.env.local` for local development.
 
