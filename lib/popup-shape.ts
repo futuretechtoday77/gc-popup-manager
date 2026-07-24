@@ -4,12 +4,11 @@ import type {
   PopupStyle,
   PopupImageSettings,
   PopupButtonStyle,
-  UNCATEGORIZED_FOLDER_ID,
   PopupTemplate,
   PopupTrigger,
   FieldKey,
 } from "./types";
-import { DEFAULT_FIELDS } from "./types";
+import { DEFAULT_FIELDS, UNCATEGORIZED_FOLDER_ID } from "./types";
 import { sanitize, slugify } from "./validate";
 import { nowIso } from "./id";
 
