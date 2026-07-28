@@ -89,8 +89,8 @@ export default function PopupPreview({
 
   return (
     // ref wrapper fills the full column width so ResizeObserver captures it.
-    <div ref={wrapRef} className="w-full">
-      <div className="flex flex-col items-center">
+    <div ref={wrapRef} className="w-full min-w-0">
+      <div className="flex min-w-0 flex-col items-center">
         {/* Outer wrapper constrains layout to the scaled visual size.
             The inner device frame uses native dimensions (so popup CSS media
             queries fire correctly) then is CSS-scaled down to fit. */}

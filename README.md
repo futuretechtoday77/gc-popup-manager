@@ -87,6 +87,7 @@ needed — the same Upstash Redis instance is reused.
 | `JWT_SECRET`               | yes         | Secret used to sign admin JWTs                                                                  |
 | `CRON_SECRET`              | recommended | Shared secret protecting the cron endpoint                                                      |
 | `NEXT_PUBLIC_APP_URL`      | optional    | Public origin used when building embed snippets (auto-detected from request headers if omitted) |
+| `NEXT_PUBLIC_APP_VERSION`  | optional    | Version string shown in the admin sidebar footer (defaults to `v0.4.0` if not set) |
 | `BLOB_READ_WRITE_TOKEN`    | yes         | Vercel Blob store token for image uploads (see Image Storage section)                           |
 
 Copy `.env.example` to `.env.local` for local development.
@@ -238,7 +239,34 @@ For button-activated popups, the builder generates one combined **Copy Button Co
 
 ---
 
-## Changes in this release
+## Release notes
+
+### v0.4.0 — Image controls, triggers, folders, cloning, button styler, success text, Name field, typography
+
+- **Image controls:** per-popup fit (crop/contain/stretch), position, scale, and
+  separate desktop/mobile frame heights. If the image cannot load, an explicit
+  "Image unavailable" placeholder is shown.
+- **Trigger modes:** button-activated (default), delayed page-load (1–86,400 s),
+  and exit-intent. "Show once per session" toggle (default on).
+- **Folders:** group popups into admin-only folders. Deleting a folder moves its
+  popups to Uncategorized without deleting them.
+- **Cloning:** clone any popup from the list or editor. Clones get a new ID,
+  `(Copy)` name, fresh timestamps, and `draft` status; submissions are never
+  copied.
+- **Button styler:** per-popup trigger button configuration with combined **Copy
+  Button Code** output (scoped CSS + HTML in one block; no secrets included).
+- **Success text:** `submissionSuccessText` replaces the old thank-you-page URL.
+  Legacy popups with `thankYouUrl` continue to redirect as before.
+- **Name field:** `firstName` field renamed to `name`; legacy key still accepted
+  everywhere and silently mapped on read.
+- **Typography:** `contentStyle` object (`headline`, `subHeadline`, `bodyText`
+  alignment/size/weight + `fontFamily`). Mobile clamps prevent unreadable sizes.
+- **Version footer:** admin sidebar now shows `gc-popup-manager v0.4.0` (reads
+  `NEXT_PUBLIC_APP_VERSION` env var; falls back to `v0.4.0`).
+
+---
+
+## Changes in prior releases
 
 ### 1. Fixed split-template image and sticky preview
 - `gcpm-image-frame` is now a proper block element whose `<img>` fills it

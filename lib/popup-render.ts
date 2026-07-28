@@ -113,6 +113,10 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
   var isSlide = template === "slideup",
     isMinimal = template === "minimal",
     isSplit = template === "split";
+  // Split needs a resolved panel height: `align-self:stretch` + `height:auto`
+  // gives the absolutely-positioned <img> no height to fill, so the image
+  // panel collapses. Pin an explicit height for both panel and card instead.
+  var splitPanelHeight = Math.max(desktopHeight, 320);
   var css =
     "#gcpm-root,#gcpm-root *{box-sizing:border-box;}" +
     "#gcpm-root{position:fixed;inset:0;z-index:2147483647;font-family:" +
@@ -156,7 +160,13 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
     mobileHeight +
     "px;}}" +
     (isSplit
-      ? "#gcpm-root .gcpm-split-img{flex:0 0 42%;align-self:stretch;}#gcpm-root .gcpm-split-img.gcpm-image-frame{height:auto;min-height:360px;}#gcpm-root .gcpm-split-form{flex:1;padding:32px 28px;}@media (max-width:639px){#gcpm-root .gcpm-split-img{display:none;}#gcpm-root .gcpm-card{flex-direction:column;border-radius:12px;}#gcpm-root .gcpm-split-form{padding:24px 20px;}}"
+      ? "#gcpm-root .gcpm-split-img{flex:0 0 42%;}#gcpm-root .gcpm-split-img.gcpm-image-frame{height:" +
+        splitPanelHeight +
+        "px;min-height:" +
+        splitPanelHeight +
+        "px;}#gcpm-root .gcpm-split-img.gcpm-image-frame img{height:100%;}#gcpm-root .gcpm-card{min-height:" +
+        splitPanelHeight +
+        "px;}#gcpm-root .gcpm-split-form{flex:1;min-width:0;padding:32px 28px;}@media (max-width:639px){#gcpm-root .gcpm-split-img{display:none;}#gcpm-root .gcpm-card{flex-direction:column;border-radius:12px;min-height:0;}#gcpm-root .gcpm-split-form{padding:24px 20px;}}"
       : "") +
     (isSlide
       ? "#gcpm-root .gcpm-overlay{background:rgba(0,0,0,.35);}@media (max-width:640px){#gcpm-root .gcpm-card{border-radius:16px 16px 0 0;}#gcpm-root .gcpm-overlay{padding:0;}}@media (min-width:641px){#gcpm-root .gcpm-overlay{align-items:flex-end;justify-content:flex-end;padding:24px;}}@keyframes gcpm-slide{from{transform:translateY(100%);opacity:.4;}to{transform:translateY(0);opacity:1;}}#gcpm-root .gcpm-card{animation:gcpm-slide .32s cubic-bezier(.16,.84,.44,1);}"

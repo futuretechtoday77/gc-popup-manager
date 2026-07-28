@@ -59,8 +59,12 @@ export default function AdminShell({
             Log out
           </button>
         </div>
+        <div className="border-t border-gray-700 px-4 py-2 text-center text-xs text-gray-500">
+          gc-popup-manager{' '}
+          {process.env.NEXT_PUBLIC_APP_VERSION ?? 'v0.4.0'}
+        </div>
       </aside>
-      <main className="flex-1 overflow-x-hidden">
+      <main className="min-w-0 flex-1">
         <div className="mx-auto max-w-6xl px-6 py-8">{children}</div>
       </main>
     </div>

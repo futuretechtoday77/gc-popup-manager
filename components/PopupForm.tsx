@@ -346,9 +346,9 @@ export default function PopupForm({
         onSubmit(v);
       }}
     >
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,1fr)]">
         {/* ---------- LEFT: editor ---------- */}
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           {/* Template picker */}
           <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <h2 className="mb-4 font-semibold text-gray-900">Template</h2>
@@ -1144,8 +1144,8 @@ export default function PopupForm({
         </div>
 
         {/* ---------- RIGHT: live preview ---------- */}
-        <div className="lg:sticky lg:top-8 lg:self-start lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
-          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="min-w-0 lg:sticky lg:top-8 lg:self-start">
+          <div className="min-w-0 rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto lg:overscroll-contain">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">Live preview</h2>
               <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 text-sm">
