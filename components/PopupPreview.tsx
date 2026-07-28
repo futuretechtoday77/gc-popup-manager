@@ -45,9 +45,13 @@ export default function PopupPreview({
   data: PreviewData;
   device: "mobile" | "desktop";
 }) {
-  // Native device frame dimensions — these drive popup CSS media queries.
-  const nativeWidth = device === "mobile" ? 375 : 480;
-  const nativeHeight = device === "mobile" ? 600 : 520;
+  // Native device frame dimensions — these drive the popup CSS media queries
+  // inside the iframe, so they must match real device widths. Desktop has to
+  // sit above the 639px mobile breakpoint used by the popup stylesheet;
+  // a narrower frame made desktop render the mobile layout (which hides the
+  // Split image column entirely).
+  const nativeWidth = device === "mobile" ? 375 : 900;
+  const nativeHeight = device === "mobile" ? 600 : 620;
 
   // Measure the available container width so we can scale the frame to fit
   // without ever overflowing or clipping horizontally.
@@ -81,11 +85,11 @@ export default function PopupPreview({
       built = { css: "", html: "" };
     }
     return `<!doctype html><html><head><meta charset="utf-8"/>
-      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <meta name="viewport" content="width=${nativeWidth}, initial-scale=1"/>
       <style>html,body{margin:0;padding:0;background:#fff;height:100%;}
       ${built.css}</style></head>
       <body>${FAKE_PAGE}${built.html}</body></html>`;
-  }, [data]);
+  }, [data, nativeWidth]);
 
   return (
     // ref wrapper fills the full column width so ResizeObserver captures it.
@@ -112,7 +116,7 @@ export default function PopupPreview({
           </div>
         </div>
         <p className="mt-2 text-xs text-gray-400">
-          {device === "mobile" ? "Mobile · 375px" : "Desktop · 480px"}
+          {device === "mobile" ? "Mobile · 375px" : "Desktop · 900px"}
         </p>
       </div>
     </div>

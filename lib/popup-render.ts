@@ -82,6 +82,9 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
     sWeightM = mClamp(sWeight, 400, 800),
     bWeightM = mClamp(bWeight, 400, 800);
 
+  // Normalize the image URL once: trim stray whitespace/newlines that would
+  // otherwise produce a broken src. External and Blob URLs pass through as-is.
+  var imageUrl = String(cfg.imageUrl == null ? "" : cfg.imageUrl).trim();
   var raw: any = cfg.imageSettings || {};
   var fit =
     raw.fit === "contain" || raw.fit === "fill" || raw.fit === "cover"
@@ -268,23 +271,30 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
     '<div class="gcpm-msg" data-gcpm-msg></div><button type="submit" class="gcpm-btn" data-gcpm-submit>' +
     esc(cfg.buttonText || "Submit") +
     "</button></form>";
+  // A stable image panel. The frame always has a resolved size, so a missing or
+  // failed image degrades to a visible "Image unavailable" panel instead of
+  // collapsing the column away.
   function imageBlock(className: string): string {
+    var missing = !imageUrl;
     return (
       '<div class="' +
       className +
-      ' gcpm-image-frame"><img src="' +
-      esc(cfg.imageUrl) +
+      ' gcpm-image-frame' +
+      (missing ? " gcpm-image-error" : "") +
+      '"><img src="' +
+      esc(imageUrl) +
       '" alt="" onerror="this.parentNode.className+=\' gcpm-image-error\'"/><div class="gcpm-image-fallback" role="status">Image unavailable</div></div>'
     );
   }
+  // Split always renders its image column on desktop. When no image is set the
+  // panel shows the "Image unavailable" state rather than disappearing, so the
+  // two-column layout stays predictable in the admin preview and the embed.
   var inner = isSplit
-    ? cfg.imageUrl
-      ? imageBlock("gcpm-split-img") +
-        '<div class="gcpm-split-form">' +
-        content +
-        "</div>"
-      : '<div class="gcpm-split-form" style="width:100%">' + content + "</div>"
-    : (!isMinimal && cfg.imageUrl ? imageBlock("") : "") +
+    ? imageBlock("gcpm-split-img") +
+      '<div class="gcpm-split-form">' +
+      content +
+      "</div>"
+    : (!isMinimal && imageUrl ? imageBlock("") : "") +
       '<div class="gcpm-body">' +
       content +
       "</div>";
