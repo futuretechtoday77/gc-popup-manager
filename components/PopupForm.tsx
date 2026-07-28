@@ -346,13 +346,13 @@ export default function PopupForm({
         onSubmit(v);
       }}
     >
-      <div className="grid gap-6 lg:grid-cols-[55fr_45fr]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,55fr)_minmax(0,45fr)]">
         {/* ---------- LEFT: editor ---------- */}
         <div className="space-y-6">
           {/* Template picker */}
           <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <h2 className="mb-4 font-semibold text-gray-900">Template</h2>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3">
               {TEMPLATE_OPTIONS.map((t) => {
                 const selected = v.template === t.key;
                 return (
@@ -1144,9 +1144,7 @@ export default function PopupForm({
         </div>
 
         {/* ---------- RIGHT: live preview ---------- */}
-        {/* Sticky on desktop so it floats beside the scrolling form; falls back
-            to normal document flow on mobile so it never obstructs the form. */}
-        <div className="lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-auto">
+        <div className="lg:sticky lg:top-8 lg:self-start lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
           <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">Live preview</h2>
@@ -1177,9 +1175,7 @@ export default function PopupForm({
                 </button>
               </div>
             </div>
-            <div className="flex justify-center">
-              <PopupPreview data={previewData} device={device} />
-            </div>
+            <PopupPreview data={previewData} device={device} />
           </div>
         </div>
       </div>
