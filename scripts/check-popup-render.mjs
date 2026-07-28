@@ -29,8 +29,17 @@ const split = buildPopup({ ...base, template: "split", imageUrl: IMG });
 check("split renders the image panel", split.html.includes("gcpm-split-img"));
 check("split keeps the exact image URL", split.html.includes(IMG));
 check("split image is not pre-marked as error", !/gcpm-split-img gcpm-image-frame gcpm-image-error/.test(split.html));
-check("split panel has an explicit height", /\.gcpm-split-img\.gcpm-image-frame\{height:\d+px;min-height:\d+px;\}/.test(split.css));
+check(
+  "split panel stretches to the card height with a minimum floor",
+  /\.gcpm-split-img\.gcpm-image-frame\{height:auto;align-self:stretch;min-height:\d+px;\}/.test(split.css),
+);
+check("split panel is a stretched flex item", /\.gcpm-split-img\{flex:0 0 42%;align-self:stretch;\}/.test(split.css));
 check("split img fills the panel", /\.gcpm-image-frame img\{[^}]*height:100%/.test(split.css));
+check(
+  "split img and fallback fill the stretched panel",
+  /\.gcpm-split-img\.gcpm-image-frame img,[^{]*\.gcpm-image-fallback\{position:absolute;inset:0;height:100%;width:100%;\}/.test(split.css),
+);
+check("split card keeps a minimum height", /\.gcpm-card\{min-height:\d+px;\}/.test(split.css));
 check("split fallback exists", split.html.includes("Image unavailable"));
 check(
   "split hides the image only under the mobile breakpoint",

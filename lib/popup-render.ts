@@ -116,9 +116,11 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
   var isSlide = template === "slideup",
     isMinimal = template === "minimal",
     isSplit = template === "split";
-  // Split needs a resolved panel height: `align-self:stretch` + `height:auto`
-  // gives the absolutely-positioned <img> no height to fill, so the image
-  // panel collapses. Pin an explicit height for both panel and card instead.
+  // Split's image panel must match the card height exactly. The card is a row
+  // flex container with `align-items:stretch`, so the panel stretches to the
+  // tallest column (usually the form). `min-height` keeps a floor when the form
+  // is short; the absolutely-positioned <img> then fills the resolved height,
+  // so there is never a blank strip below the image.
   var splitPanelHeight = Math.max(desktopHeight, 320);
   var css =
     "#gcpm-root,#gcpm-root *{box-sizing:border-box;}" +
@@ -163,11 +165,9 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
     mobileHeight +
     "px;}}" +
     (isSplit
-      ? "#gcpm-root .gcpm-split-img{flex:0 0 42%;}#gcpm-root .gcpm-split-img.gcpm-image-frame{height:" +
+      ? "#gcpm-root .gcpm-split-img{flex:0 0 42%;align-self:stretch;}#gcpm-root .gcpm-split-img.gcpm-image-frame{height:auto;align-self:stretch;min-height:" +
         splitPanelHeight +
-        "px;min-height:" +
-        splitPanelHeight +
-        "px;}#gcpm-root .gcpm-split-img.gcpm-image-frame img{height:100%;}#gcpm-root .gcpm-card{min-height:" +
+        "px;}#gcpm-root .gcpm-split-img.gcpm-image-frame img,#gcpm-root .gcpm-split-img.gcpm-image-frame .gcpm-image-fallback{position:absolute;inset:0;height:100%;width:100%;}#gcpm-root .gcpm-card{min-height:" +
         splitPanelHeight +
         "px;}#gcpm-root .gcpm-split-form{flex:1;min-width:0;padding:32px 28px;}@media (max-width:639px){#gcpm-root .gcpm-split-img{display:none;}#gcpm-root .gcpm-card{flex-direction:column;border-radius:12px;min-height:0;}#gcpm-root .gcpm-split-form{padding:24px 20px;}}"
       : "") +
