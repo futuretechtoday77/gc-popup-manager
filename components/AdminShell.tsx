@@ -61,7 +61,7 @@ export default function AdminShell({
         </div>
         <div className="border-t border-gray-700 px-4 py-2 text-center text-xs text-gray-500">
           gc-popup-manager{' '}
-          {process.env.NEXT_PUBLIC_APP_VERSION ?? 'v0.4.0'}
+          {process.env.NEXT_PUBLIC_APP_VERSION ?? 'v0.4.1'}
         </div>
       </aside>
       <main className="min-w-0 flex-1">

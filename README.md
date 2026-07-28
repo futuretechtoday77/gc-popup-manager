@@ -87,7 +87,7 @@ needed — the same Upstash Redis instance is reused.
 | `JWT_SECRET`               | yes         | Secret used to sign admin JWTs                                                                  |
 | `CRON_SECRET`              | recommended | Shared secret protecting the cron endpoint                                                      |
 | `NEXT_PUBLIC_APP_URL`      | optional    | Public origin used when building embed snippets (auto-detected from request headers if omitted) |
-| `NEXT_PUBLIC_APP_VERSION`  | optional    | Version string shown in the admin sidebar footer (defaults to `v0.4.0` if not set) |
+| `NEXT_PUBLIC_APP_VERSION`  | optional    | Version string shown in the admin sidebar footer (defaults to `v0.4.1` if not set) |
 | `BLOB_READ_WRITE_TOKEN`    | yes         | Vercel Blob store token for image uploads (see Image Storage section)                           |
 
 Copy `.env.example` to `.env.local` for local development.
@@ -240,6 +240,18 @@ For button-activated popups, the builder generates one combined **Copy Button Co
 ---
 
 ## Release notes
+
+### v0.4.1 — Stretch split image panel
+
+- **Split template:** the image panel now stretches to the full card height
+  (`align-self:stretch` with a `min-height` floor) instead of a pinned pixel
+  height, so no blank strip appears below the image when the form column is
+  taller. The image and the "Image unavailable" fallback are absolutely
+  positioned to fill the resolved panel height.
+- **Render check:** `scripts/check-popup-render.mjs` asserts the new stretch
+  rules for the split panel, its image, and the card minimum height.
+- **Version footer:** admin sidebar shows `gc-popup-manager v0.4.1`
+  (`NEXT_PUBLIC_APP_VERSION` still overrides).
 
 ### v0.4.0 — Image controls, triggers, folders, cloning, button styler, success text, Name field, typography
 
