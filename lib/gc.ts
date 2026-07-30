@@ -4,6 +4,7 @@
 
 export interface GCContact {
   id?: string | number;
+  _id?: string | number;
   email?: string;
   firstName?: string;
   first_name?: string;
@@ -40,10 +41,10 @@ export function extractContacts(payload: unknown): GCContact[] {
       const inner = obj.data as Record<string, unknown>;
       if (Array.isArray(inner.contacts)) return inner.contacts as GCContact[];
       // Single contact under data.
-      if (inner.id || inner.email) return [inner as GCContact];
+      if (inner.id || inner._id || inner.email) return [inner as GCContact];
     }
     // Single contact at the top level.
-    if (obj.id || obj.email) return [obj as GCContact];
+    if (obj.id || obj._id || obj.email) return [obj as GCContact];
   }
   return [];
 }
@@ -58,7 +59,7 @@ export function extractContact(payload: unknown): GCContact | null {
     if (obj.contact && typeof obj.contact === 'object') {
       return obj.contact as GCContact;
     }
-    if (obj.id || obj.email) return obj as GCContact;
+    if (obj.id || obj._id || obj.email) return obj as GCContact;
   }
   const arr = extractContacts(payload);
   return arr.length > 0 ? arr[0] : null;
@@ -146,12 +147,22 @@ export function readName(contact: GCContact | null): string {
   return String(contact.firstName || contact.first_name || contact.name || '');
 }
 
+// Read the full display name field specifically (distinct from firstName).
+export function readDisplayName(contact: GCContact | null): string {
+  if (!contact) return '';
+  return String(contact.name || '');
+}
+
 export function readPhone(contact: GCContact | null): string {
   if (!contact) return '';
   return String(contact.phone || '');
 }
 
+// Identify a GC contact's id, accepting either `id` or `_id` (some GC API
+// responses/versions use `_id`).
 export function contactId(contact: GCContact | null): string | null {
-  if (!contact || contact.id === undefined || contact.id === null) return null;
-  return String(contact.id);
+  if (!contact) return null;
+  const raw = contact.id ?? contact._id;
+  if (raw === undefined || raw === null) return null;
+  return String(raw);
 }

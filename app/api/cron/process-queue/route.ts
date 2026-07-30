@@ -14,6 +14,7 @@ import {
   updateContact,
   fireTag,
   readName,
+  readDisplayName,
   readPhone,
   contactId,
 } from '@/lib/gc';
@@ -71,8 +72,15 @@ async function processOne(id: string): Promise<void> {
   const existingContact = await searchContactByEmail(submission.email);
 
   // c. Merge: never overwrite existing name/phone with empty values.
+  // Preserve the full display `name` field separately from `firstName` --
+  // fire-tag on the live GC API is known to clear one or both, so both are
+  // tracked and restored independently below.
   const mergedFirstName = preferExisting(
     readName(existingContact),
+    submission.firstName,
+  );
+  const mergedDisplayName = preferExisting(
+    readDisplayName(existingContact),
     submission.firstName,
   );
   const mergedPhone = preferExisting(
@@ -85,8 +93,8 @@ async function processOne(id: string): Promise<void> {
   // preserves compatibility with the existing queue/CRM integration.
   const contactPayload: Record<string, unknown> = {
     email: submission.email,
-    name: mergedFirstName,
     firstName: mergedFirstName,
+    name: mergedDisplayName,
     phone: mergedPhone,
   };
   if (submission.notes) contactPayload.notes = submission.notes;
@@ -114,20 +122,24 @@ async function processOne(id: string): Promise<void> {
     if (!gcId) gcId = contactId(refetched);
   }
 
-  // h. If name/phone are now missing, restore them via PUT.
+  // h. If firstName/name/phone are now missing, restore them via PUT.
+  // Each field is checked and restored independently: fire-tag has been
+  // observed to blank firstName and/or name and/or phone in isolation.
   if (gcId) {
-    const nameNow = readName(refetched);
+    const firstNameNow = readName(refetched);
+    const displayNameNow = readDisplayName(refetched);
     const phoneNow = readPhone(refetched);
-    const needsNameRestore =
-      mergedFirstName.trim().length > 0 && nameNow.trim().length === 0;
+    const needsFirstNameRestore =
+      mergedFirstName.trim().length > 0 && firstNameNow.trim().length === 0;
+    const needsDisplayNameRestore =
+      mergedDisplayName.trim().length > 0 && displayNameNow.trim().length === 0;
     const needsPhoneRestore =
       mergedPhone.trim().length > 0 && phoneNow.trim().length === 0;
-    if (needsNameRestore || needsPhoneRestore) {
-      const restoredName = preferExisting(nameNow, mergedFirstName);
+    if (needsFirstNameRestore || needsDisplayNameRestore || needsPhoneRestore) {
       await updateContact(gcId, {
         email: submission.email,
-        name: restoredName,
-        firstName: restoredName,
+        firstName: preferExisting(firstNameNow, mergedFirstName),
+        name: preferExisting(displayNameNow, mergedDisplayName),
         phone: preferExisting(phoneNow, mergedPhone),
       });
     }
