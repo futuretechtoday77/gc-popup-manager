@@ -334,6 +334,17 @@ For button-activated popups, the builder generates one combined **Copy Button Co
 - Old embed scripts (`data-popup-id` attribute, `/api/popup/:id/config`,
   `/api/submit`) continue to work without changes.
 
+### v0.6.0 — REST API v1
+
+- **New `/api/v1/` REST API** with JWT Bearer auth for external callers (bots, Shopify, scripts).
+- **Popup management:** GET list, GET one, POST create, PUT update, DELETE, POST clone.
+- **Submissions:** GET list (filter by status/popupId/limit), POST retry.
+- **Queue:** POST trigger — manually drain the processing queue.
+- **Auth:** `POST /api/v1/auth` exchanges admin password for a 12h JWT token.
+- **Submit response** expanded to `{success:true, submissionId, data:{}}` — leaves a hook for dynamic content (e.g. Shopify discount codes) in future without breaking existing embeds.
+- **Designed for expansion:** all routes under `/api/v1/`; API-key layer or v2 additions can be added later without moving endpoints.
+- **Version footer:** admin sidebar shows `gc-popup-manager v0.6.0`.
+
 ### v0.5.2 — Unconditional GC field restoration
 
 - **Critical fix:** phone/name wiped after tag-fire. Restoration is now unconditional — merged name and phone are always PUT back after tag-fire regardless of re-fetch result.
