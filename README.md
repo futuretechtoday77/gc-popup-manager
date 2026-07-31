@@ -334,6 +334,11 @@ For button-activated popups, the builder generates one combined **Copy Button Co
 - Old embed scripts (`data-popup-id` attribute, `/api/popup/:id/config`,
   `/api/submit`) continue to work without changes.
 
+### v0.6.1 — Next.js route compatibility fix
+
+- **Build fix:** extracted `runQueue` from `app/api/cron/process-queue/route.ts` into `lib/queue-processor.ts` because Next.js route files cannot export non-route fields. Fixes the Vercel build error that blocked v0.6.0 deployment.
+- **Version footer:** admin sidebar shows `gc-popup-manager v0.6.1`.
+
 ### v0.6.0 — REST API v1
 
 - **New `/api/v1/` REST API** with JWT Bearer auth for external callers (bots, Shopify, scripts).
