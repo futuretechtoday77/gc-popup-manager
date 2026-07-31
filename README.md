@@ -334,6 +334,13 @@ For button-activated popups, the builder generates one combined **Copy Button Co
 - Old embed scripts (`data-popup-id` attribute, `/api/popup/:id/config`,
   `/api/submit`) continue to work without changes.
 
+### v0.5.2 — Unconditional GC field restoration
+
+- **Critical fix:** phone/name wiped after tag-fire. Restoration is now unconditional — merged name and phone are always PUT back after tag-fire regardless of re-fetch result.
+- **GET relay body fix:** search passes `{email}`, get-by-ID passes `{}`, preventing GC v2 400 rejections.
+- **Post-tag delay:** increased from 2s to 5s.
+- **Version footer:** admin sidebar shows `gc-popup-manager v0.5.2`.
+
 ### v0.5.1 — Universal embed script
 
 - **Universal embed:** one `<script src=".../embed.js" async></script>` installs site-wide with no popup ID required.
