@@ -334,6 +334,14 @@ For button-activated popups, the builder generates one combined **Copy Button Co
 - Old embed scripts (`data-popup-id` attribute, `/api/popup/:id/config`,
   `/api/submit`) continue to work without changes.
 
+### v0.5.1 — Universal embed script
+
+- **Universal embed:** one `<script src=".../embed.js" async></script>` installs site-wide with no popup ID required.
+- **Two-layer auto-firing priority:** declare `<script data-gc-popup="id">` for a site-wide default delay/exit popup; add `data-gc-override` on a page-specific declaration to suppress the default on that page.
+- **Button triggers unchanged:** `[data-gc-popup-trigger]` always binds on click, fully independent of the layer system.
+- **Backwards compatible:** legacy `<script ... data-popup-id="...">` single-popup embeds continue to work unchanged.
+- **Version footer:** admin sidebar shows `gc-popup-manager v0.5.1`.
+
 ### v0.5.0 — GC relay transport, scheduler fix, button suppression fix
 
 - **GC v2 API fix:** Global Control's v2 API requires a JSON body on every request including GET.
