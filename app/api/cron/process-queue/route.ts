@@ -162,7 +162,7 @@ async function handleFailure(id: string, err: unknown): Promise<void> {
   }
 }
 
-async function runQueue(): Promise<{
+export async function runQueue(): Promise<{
   claimed: number;
   processed: number;
   failed: number;

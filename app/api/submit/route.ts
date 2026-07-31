@@ -93,5 +93,5 @@ export async function POST(req: NextRequest) {
   await enqueue(submission.id);
 
   // Return immediately. No Global Control call here.
-  return withCors(ok({ submissionId: submission.id }));
+  return withCors(ok({ submissionId: submission.id, data: {} }));
 }
