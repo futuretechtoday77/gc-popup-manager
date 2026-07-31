@@ -333,3 +333,17 @@ For button-activated popups, the builder generates one combined **Copy Button Co
   `normFields` / `normalizeContentStyle` / `normalizeSuccessText` helpers.
 - Old embed scripts (`data-popup-id` attribute, `/api/popup/:id/config`,
   `/api/submit`) continue to work without changes.
+
+### v0.5.0 — GC relay transport, scheduler fix, button suppression fix
+
+- **GC v2 API fix:** Global Control's v2 API requires a JSON body on every request including GET.
+  Node fetch cannot send GET bodies, so all GC calls now route through an authenticated relay at
+  `rifecode.com/webhooks/gc-relay.php` (PHP curl). The relay is shared-secret protected, POST-only,
+  and path-whitelisted. New env vars: `GC_RELAY_URL` and `GC_RELAY_SECRET`. When both are set,
+  `lib/gc.ts` uses relay mode; otherwise direct GC calls work unchanged.
+- **cPanel scheduler path corrected:** the Popup Manager bridge cron entry was pointing at an
+  obsolete `/home/nikola/...` path. Corrected to `/home/rifecode/private-config/run-popup-queue.sh`.
+- **Button-activated popup suppression bypass:** button-triggered popups now bypass the
+  session-storage suppression flag (`launch(true)` on click), so clicking the button always opens
+  the popup regardless of prior submission. Delay and exit-intent popups retain suppression.
+- **Version footer:** admin sidebar now shows `gc-popup-manager v0.5.0`.
