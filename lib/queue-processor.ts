@@ -1,0 +1,181 @@
+import {
+  getRedis,
+  getSubmission,
+  saveSubmission,
+  getPopup,
+  keys,
+} from '@/lib/redis';
+import {
+  searchContactByEmail,
+  getContactById,
+  createContact,
+  updateContact,
+  fireTag,
+  readName,
+  readDisplayName,
+  readPhone,
+  contactId,
+} from '@/lib/gc';
+import { nowIso } from '@/lib/id';
+import type { Submission } from '@/lib/types';
+
+const BATCH_SIZE = 20;
+const MAX_RETRIES = 3;
+const POST_TAG_DELAY_MS = 5000;
+const BETWEEN_SUBMISSIONS_MS = 500;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Merge helper: never overwrite an existing non-empty value with an empty one.
+function preferExisting(existing: string, incoming: string): string {
+  const inc = (incoming || '').trim();
+  const ex = (existing || '').trim();
+  return inc.length > 0 ? inc : ex;
+}
+
+async function processOne(id: string): Promise<void> {
+  const submission = await getSubmission(id);
+  if (!submission) return;
+
+  // a. Mark processing.
+  submission.status = 'processing';
+  await saveSubmission(submission);
+
+  const popup = await getPopup(submission.popupId);
+  if (!popup) {
+    throw new Error(`Popup ${submission.popupId} no longer exists`);
+  }
+
+  // b. Search for an existing contact by email. extractContacts inside the
+  //    client already handles data.contacts / data.data / data / bare-array.
+  const existingContact = await searchContactByEmail(submission.email);
+
+  // c. Merge: never overwrite existing name/phone with empty values.
+  // Preserve the full display `name` field separately from `firstName` --
+  // fire-tag on the live GC API is known to clear one or both, so both are
+  // tracked and restored independently below.
+  const mergedFirstName = preferExisting(
+    readName(existingContact),
+    submission.firstName,
+  );
+  const mergedDisplayName = preferExisting(
+    readDisplayName(existingContact),
+    submission.firstName,
+  );
+  const mergedPhone = preferExisting(
+    readPhone(existingContact),
+    submission.phone,
+  );
+
+  // Send the full name as both `name` and `firstName` in the existing Global
+  // Control shape. GC parses first/last from the full name; keeping firstName
+  // preserves compatibility with the existing queue/CRM integration.
+  const contactPayload: Record<string, unknown> = {
+    email: submission.email,
+    firstName: mergedFirstName,
+    name: mergedDisplayName,
+    phone: mergedPhone,
+  };
+  if (submission.notes) contactPayload.notes = submission.notes;
+
+  // d. Create or update the GC contact.
+  let gcId = contactId(existingContact);
+  if (gcId) {
+    await updateContact(gcId, contactPayload);
+  } else {
+    const created = await createContact(contactPayload);
+    gcId = contactId(created);
+  }
+
+  // e. Fire the tag.
+  await fireTag(popup.gcTagId, submission.email);
+  submission.tagFired = true;
+
+  // f. Wait — fire-tag may asynchronously wipe fields on the GC side.
+  await sleep(POST_TAG_DELAY_MS);
+
+  // g. Re-fetch the contact by id (fall back to email lookup if needed).
+  let refetched = gcId ? await getContactById(gcId) : null;
+  if (!refetched) {
+    refetched = await searchContactByEmail(submission.email);
+    if (!gcId) gcId = contactId(refetched);
+  }
+
+  // h. Always restore the merged fields. GC may clear them after the
+  // re-fetch window, so a conditional restore leaves a race that can wipe data.
+  if (gcId) {
+    await updateContact(gcId, {
+      email: submission.email,
+      firstName: mergedFirstName,
+      name: mergedDisplayName,
+      phone: mergedPhone,
+    });
+  }
+
+  // i. Mark processed.
+  submission.gcContactId = gcId;
+  submission.status = 'processed';
+  submission.processedAt = nowIso();
+  submission.error = null;
+  await saveSubmission(submission);
+}
+
+async function handleFailure(id: string, err: unknown): Promise<void> {
+  const redis = getRedis();
+  const submission = await getSubmission(id);
+  if (!submission) return;
+  const message = err instanceof Error ? err.message : String(err);
+  submission.retryCount = (submission.retryCount || 0) + 1;
+  submission.error = message;
+
+  if (submission.retryCount < MAX_RETRIES) {
+    // Re-queue for another attempt.
+    submission.status = 'queued';
+    await saveSubmission(submission);
+    await redis.rpush(keys.queuePending(), submission.id);
+  } else {
+    // Give up.
+    submission.status = 'max_retries';
+    await saveSubmission(submission);
+    await redis.sadd(keys.queueFailed(), submission.id);
+  }
+}
+
+export async function runQueue(): Promise<{
+  claimed: number;
+  processed: number;
+  failed: number;
+}> {
+  const redis = getRedis();
+
+  // 1. LPOP up to BATCH_SIZE ids from queue:pending.
+  const ids: string[] = [];
+  for (let i = 0; i < BATCH_SIZE; i++) {
+    const id = (await redis.lpop(keys.queuePending())) as string | null;
+    if (!id) break;
+    ids.push(id);
+  }
+
+  let processed = 0;
+  let failed = 0;
+
+  // 2. Process each in order.
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    try {
+      await processOne(id);
+      processed++;
+    } catch (err) {
+      await handleFailure(id, err);
+      failed++;
+    }
+    // 500ms between submissions.
+    if (i < ids.length - 1) {
+      await sleep(BETWEEN_SUBMISSIONS_MS);
+    }
+  }
+
+  return { claimed: ids.length, processed, failed };
+}

@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { error, json, unauthorized } from '@/lib/http';
-import { runQueue } from '@/app/api/cron/process-queue/route';
+import { runQueue } from '@/lib/queue-processor';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
