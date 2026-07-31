@@ -65,32 +65,71 @@ export function extractContact(payload: unknown): GCContact | null {
   return arr.length > 0 ? arr[0] : null;
 }
 
+function errorMessage(body: unknown, fallback: string): string {
+  return body && typeof body === 'object'
+    ? JSON.stringify(body)
+    : String(body ?? fallback);
+}
+
+async function readJsonOrText(res: Response): Promise<unknown> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 async function req(
   method: string,
   path: string,
   body?: unknown,
 ): Promise<unknown> {
+  const relayUrl = process.env.GC_RELAY_URL?.trim();
+  const relaySecret = process.env.GC_RELAY_SECRET?.trim();
+
+  if (relayUrl && relaySecret) {
+    const relayPayload: Record<string, unknown> = { method, path };
+    if (body !== undefined) relayPayload.body = body;
+
+    const relayResponse = await fetch(relayUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Relay-Secret': relaySecret,
+      },
+      body: JSON.stringify(relayPayload),
+      cache: 'no-store',
+    });
+    const relayResult = await readJsonOrText(relayResponse);
+    const envelope =
+      relayResult && typeof relayResult === 'object'
+        ? (relayResult as { status?: unknown; body?: unknown })
+        : null;
+    const status =
+      typeof envelope?.status === 'number' ? envelope.status : relayResponse.status;
+    const responseBody = envelope?.body;
+
+    if (!relayResponse.ok || status >= 400) {
+      throw new Error(
+        `GC ${method} ${path} failed (${status}): ${errorMessage(responseBody ?? relayResult, relayResponse.statusText)}`,
+      );
+    }
+    return responseBody;
+  }
+
   const res = await fetch(`${base()}${path}`, {
     method,
     headers: headers(),
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: 'no-store',
   });
-  const text = await res.text();
-  let parsed: unknown = null;
-  if (text) {
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      parsed = text;
-    }
-  }
+  const parsed = await readJsonOrText(res);
   if (!res.ok) {
-    const msg =
-      parsed && typeof parsed === 'object'
-        ? JSON.stringify(parsed)
-        : String(parsed ?? res.statusText);
-    throw new Error(`GC ${method} ${path} failed (${res.status}): ${msg}`);
+    throw new Error(
+      `GC ${method} ${path} failed (${res.status}): ${errorMessage(parsed, res.statusText)}`,
+    );
   }
   return parsed;
 }
