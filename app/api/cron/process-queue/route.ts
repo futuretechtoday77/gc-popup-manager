@@ -28,11 +28,18 @@ export const maxDuration = 300;
 
 const BATCH_SIZE = 20;
 const MAX_RETRIES = 3;
-const POST_TAG_DELAY_MS = 2000;
+const POST_TAG_DELAY_MS = 5000;
 const BETWEEN_SUBMISSIONS_MS = 500;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Merge helper: never overwrite an existing non-empty value with an empty one.
+function preferExisting(existing: string, incoming: string): string {
+  const inc = (incoming || '').trim();
+  const ex = (existing || '').trim();
+  return inc.length > 0 ? inc : ex;
 }
 
 function authorized(req: NextRequest): boolean {
@@ -45,13 +52,6 @@ function authorized(req: NextRequest): boolean {
   const headerSecret = req.headers.get('x-cron-secret') || '';
   const qsSecret = req.nextUrl.searchParams.get('secret') || '';
   return bearer === secret || headerSecret === secret || qsSecret === secret;
-}
-
-// Merge helper: never overwrite an existing non-empty value with an empty one.
-function preferExisting(existing: string, incoming: string): string {
-  const inc = (incoming || '').trim();
-  const ex = (existing || '').trim();
-  return inc.length > 0 ? inc : ex;
 }
 
 async function processOne(id: string): Promise<void> {
@@ -122,27 +122,15 @@ async function processOne(id: string): Promise<void> {
     if (!gcId) gcId = contactId(refetched);
   }
 
-  // h. If firstName/name/phone are now missing, restore them via PUT.
-  // Each field is checked and restored independently: fire-tag has been
-  // observed to blank firstName and/or name and/or phone in isolation.
+  // h. Always restore the merged fields. GC may clear them after the
+  // re-fetch window, so a conditional restore leaves a race that can wipe data.
   if (gcId) {
-    const firstNameNow = readName(refetched);
-    const displayNameNow = readDisplayName(refetched);
-    const phoneNow = readPhone(refetched);
-    const needsFirstNameRestore =
-      mergedFirstName.trim().length > 0 && firstNameNow.trim().length === 0;
-    const needsDisplayNameRestore =
-      mergedDisplayName.trim().length > 0 && displayNameNow.trim().length === 0;
-    const needsPhoneRestore =
-      mergedPhone.trim().length > 0 && phoneNow.trim().length === 0;
-    if (needsFirstNameRestore || needsDisplayNameRestore || needsPhoneRestore) {
-      await updateContact(gcId, {
-        email: submission.email,
-        firstName: preferExisting(firstNameNow, mergedFirstName),
-        name: preferExisting(displayNameNow, mergedDisplayName),
-        phone: preferExisting(phoneNow, mergedPhone),
-      });
-    }
+    await updateContact(gcId, {
+      email: submission.email,
+      firstName: mergedFirstName,
+      name: mergedDisplayName,
+      phone: mergedPhone,
+    });
   }
 
   // i. Mark processed.

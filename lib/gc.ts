@@ -140,6 +140,7 @@ export async function searchContactByEmail(
   const payload = await req(
     'GET',
     `/contacts?search=${encodeURIComponent(email)}`,
+    { email },
   );
   const contacts = extractContacts(payload);
   const lower = email.toLowerCase();
@@ -150,7 +151,7 @@ export async function searchContactByEmail(
 }
 
 export async function getContactById(id: string): Promise<GCContact | null> {
-  const payload = await req('GET', `/contacts/${encodeURIComponent(id)}`);
+  const payload = await req('GET', `/contacts/${encodeURIComponent(id)}`, {});
   return extractContact(payload);
 }
 
