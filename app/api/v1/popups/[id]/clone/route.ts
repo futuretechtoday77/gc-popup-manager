@@ -39,6 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       trigger: { ...source.trigger },
       gcTagId: source.gcTagId,
       submissionSuccessText: normalizeSuccessText(source.submissionSuccessText, DEFAULT_SUCCESS_TEXT),
+      trackingScripts: source.trackingScripts || '',
       thankYouUrl: source.thankYouUrl || '',
       allowedDomains: [...source.allowedDomains],
       style: { ...source.style },

@@ -101,6 +101,10 @@ export interface Popup {
   gcTagId: string; // NEVER exposed publicly
   // Shown in-popup after a successful submission (line breaks allowed).
   submissionSuccessText: string;
+  // Raw HTML/JS (script tags, img pixels) injected into the page after a
+  // successful submission for ad conversion tracking. Not secret -- the
+  // embed receives it to fire it in the visitor's browser.
+  trackingScripts: string;
   // Legacy: kept only for backward compatibility / migration of old popups.
   thankYouUrl: string;
   allowedDomains: string[]; // NEVER exposed publicly
@@ -178,6 +182,8 @@ export interface PublicPopupConfig {
   fields: PopupField[];
   trigger: PopupTrigger;
   submissionSuccessText: string;
+  // Raw HTML/JS fired after a successful submission (ad conversion pixels).
+  trackingScripts: string;
   // Legacy redirect target; only present/used for old popups that set it.
   thankYouUrl: string;
   style: PopupStyle;

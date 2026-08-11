@@ -367,6 +367,7 @@ export function buildNewPopup(input: Record<string, unknown>): Popup {
       input.submissionSuccessText,
       DEFAULT_SUCCESS_TEXT,
     ),
+    trackingScripts: sanitize(input.trackingScripts, 20000),
     thankYouUrl: sanitize(input.thankYouUrl, 2000),
     allowedDomains: normDomains(input.allowedDomains),
     style: normStyle(input.style),
@@ -441,6 +442,9 @@ export function applyPopupUpdate(
     thankYouUrl: has("thankYouUrl")
       ? sanitize(input.thankYouUrl, 2000)
       : existing.thankYouUrl,
+    trackingScripts: has("trackingScripts")
+      ? sanitize(input.trackingScripts, 20000)
+      : existing.trackingScripts,
     allowedDomains: has("allowedDomains")
       ? normDomains(input.allowedDomains)
       : existing.allowedDomains,

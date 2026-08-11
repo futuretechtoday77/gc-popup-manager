@@ -83,7 +83,35 @@ const SCRIPT = String.raw`(function () {
       xhr.send(JSON.stringify(data));
     }
 
-    function teardown() {
+    function fireTracking(raw) {
+      if (!raw || typeof raw !== "string" || !raw.trim()) return;
+      try {
+        var doc = new DOMParser().parseFromString(raw, "text/html");
+        var container = document.createElement("div");
+        container.id = "gcpm-tracking-" + popupId;
+        container.style.display = "none";
+        var nodes = doc.body.childNodes;
+        for (var i = 0; i < nodes.length; i++) {
+          var node = nodes[i];
+          if (node.tagName === "SCRIPT") {
+            // Scripts parsed by DOMParser never execute on append, so rebuild
+            // them with createElement (which does execute once inserted).
+            var s = document.createElement("script");
+            for (var j = 0; j < node.attributes.length; j++) {
+              var attr = node.attributes[j];
+              s.setAttribute(attr.name, attr.value);
+            }
+            s.text = node.textContent || "";
+            container.appendChild(s);
+          } else {
+            container.appendChild(node.cloneNode(true));
+          }
+        }
+        (document.body || document.documentElement).appendChild(container);
+      } catch (e) {}
+    }
+
+  function teardown() {
       state.open = false;
       if (state.root && state.root.parentNode) state.root.parentNode.removeChild(state.root);
       if (state.style && state.style.parentNode) state.style.parentNode.removeChild(state.style);
@@ -163,6 +191,7 @@ const SCRIPT = String.raw`(function () {
           }
           var target = body || root.querySelector(".gcpm-split-form") || root.querySelector(".gcpm-card");
           if (target) target.innerHTML = successHtml(hasSuccessText ? successText : "Thanks! Your submission was received.");
+          fireTracking(cfg.trackingScripts);
         });
       });
     }

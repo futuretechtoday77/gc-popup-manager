@@ -50,6 +50,7 @@ export interface PopupFormValue {
   };
   gcTagId: string;
   submissionSuccessText: string;
+  trackingScripts: string; // raw HTML/JS fired after a successful submission
   thankYouUrl: string; // legacy redirect, retained for old popups
   allowedDomains: string; // newline/comma separated in the form
   style: { primaryColor: string; buttonColor: string; textColor: string };
@@ -84,6 +85,7 @@ export function emptyForm(): PopupFormValue {
     },
     gcTagId: "",
     submissionSuccessText: DEFAULT_SUCCESS_TEXT,
+    trackingScripts: "",
     thankYouUrl: "",
     allowedDomains: "",
     style: {
@@ -123,6 +125,7 @@ export function fromPopup(p: Popup): PopupFormValue {
     },
     gcTagId: p.gcTagId,
     submissionSuccessText: p.submissionSuccessText || DEFAULT_SUCCESS_TEXT,
+    trackingScripts: p.trackingScripts || "",
     thankYouUrl: p.thankYouUrl || "",
     allowedDomains: (p.allowedDomains || []).join("\n"),
     style: {
@@ -614,6 +617,22 @@ export default function PopupForm({
                   Shown inside the popup after a successful submission. Line
                   breaks are allowed; the popup no longer redirects to a
                   thank-you page.
+                </p>
+              </div>
+              <div>
+                <label className={label}>Tracking Scripts</label>
+                <textarea
+                  className={input}
+                  rows={6}
+                  value={v.trackingScripts}
+                  onChange={(e) => set("trackingScripts", e.target.value)}
+                  placeholder={"<!-- e.g. Meta pixel snippet -->"}
+                  spellCheck={false}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Raw HTML/JS (script tags, img pixels, etc.) injected into
+                  the page after a successful submission. Use for ad
+                  conversion tracking.
                 </p>
               </div>
             </div>

@@ -45,6 +45,7 @@ export async function POST(
       source.submissionSuccessText,
       DEFAULT_SUCCESS_TEXT,
     ),
+    trackingScripts: source.trackingScripts || "",
     thankYouUrl: source.thankYouUrl || "",
     allowedDomains: [...source.allowedDomains],
     style: { ...source.style },

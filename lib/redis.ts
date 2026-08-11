@@ -102,6 +102,8 @@ export function migratePopupFields(popup: any): Popup {
     trigger: normalizeTrigger(popup.trigger, popup.id),
     fields: normFields(popup.fields),
     submissionSuccessText,
+    trackingScripts:
+      typeof popup.trackingScripts === "string" ? popup.trackingScripts : "",
     thankYouUrl:
       typeof popup.thankYouUrl === "string" ? popup.thankYouUrl : "",
     style: migratedStyle,
@@ -215,6 +217,8 @@ export function toPublicConfig(popup: Popup): PublicPopupConfig {
     trigger: popup.trigger,
     submissionSuccessText:
       normalizeSuccessText(popup.submissionSuccessText, "") || "",
+    // Raw HTML/JS fired after a successful submission (ad conversion pixels).
+    trackingScripts: popup.trackingScripts || "",
     // Legacy redirect target retained only for old popups that set it.
     thankYouUrl: popup.thankYouUrl || "",
     style: popup.style,
