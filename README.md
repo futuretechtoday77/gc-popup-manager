@@ -15,8 +15,12 @@ sites, Shopify, ClickFunnels, Webflow, GoHighLevel, and more.
   returns success to the visitor in well under 50ms. It never calls Global
   Control inline.
 - A Vercel cron job (every 5 minutes) that drains the queue and talks to Global
-  Control: create/update the contact, fire the tag, then verify and restore any
-  name/phone the tag-fire may have wiped.
+  Control: read the existing contact, merge, then write the **complete merged
+  record** on every call including the tag fire, and verify what landed.
+
+> **Read this before touching the Global Control code:** every GC write is a
+> full-record upsert. Any field missing from the payload is **deleted**. See
+> [Global Control write semantics](#global-control-write-semantics).
 
 ## Architecture
 
@@ -174,14 +178,63 @@ only public display fields — `gcTagId` and `allowedDomains` are never exposed.
    immediately.
 2. `POST /api/cron/process-queue` (every 5 min):
    - `LPOP`s up to 20 submission IDs.
-   - For each: mark `processing`, look up the GC contact by email (tolerating
-     `data.contacts` / `data.data` / `data` / bare-array response shapes),
-     merge without overwriting existing name/phone with empty values,
-     create-or-update the contact, fire the tag, wait 2s, re-fetch, and restore
-     name/phone if the tag-fire wiped them. Mark `processed`.
+   - For each: mark `processing`; look up the GC contact by email (tolerating
+     `data.contact` / `data.contact.doc` / `data.contacts` / `data.data` /
+     `data` / bare-array response shapes); merge field by field, never
+     overwriting a stored value with an empty one; create-or-update with the
+     complete merged record; **fire the tag carrying that same complete record**;
+     then verify what landed and repair only on mismatch. Mark `processed`.
+   - **The existing-contact read is allowed to throw.** On an outage, 429 or 502
+     the submission requeues rather than writing from an unconfirmed state.
+     Never wrap that read in a `try/catch` that yields `null`: a silent null
+     reads as "no existing contact" and the next write deletes the stored name
+     and phone.
    - On error: increment `retryCount`; re-queue if under 3 attempts, otherwise
      mark `max_retries` and add to `queue:failed`.
    - 500ms pause between submissions.
+
+<a id="global-control-write-semantics"></a>
+### Global Control write semantics (critical)
+
+**Every write to Global Control is a full-record upsert. Any field omitted from
+the payload is deleted.** True of `POST /contacts`, `PUT /contacts/{id}` and
+`POST /tags/fire-tag/{tagId}` alike, and the deletion is synchronous — part of
+that same call, not a later side effect.
+
+Verified against the live API, 2026-10-06/07:
+
+| Call | Payload | Result |
+|---|---|---|
+| `create_contact` | name, no phone | existing phone **deleted**, no tag involved |
+| `fire_tag` | email only | name and phone **deleted instantly** |
+| `fire_tag` | email + firstName + lastName + phone | everything **intact** |
+
+Consequences for anyone editing `lib/gc.ts` or `lib/queue-processor.ts`:
+
+- Always send `name`, `firstName`, `lastName` and `phone` on every write.
+  `lastName` is stored separately from the display name and was being silently
+  deleted by every write that omitted it.
+- A field you cannot positively confirm is a field you would delete. If the read
+  fails, do not write.
+- Pass **merged** values, not the submission's values. A name-and-email-only
+  opt-in must still send the stored phone, which is exactly why it no longer
+  destroys it.
+
+#### Do not reinstate the old workaround
+
+Before v0.7.0 the code waited ~5s after firing the tag, re-fetched, and restored
+the fields. That treated the wipe as asynchronous, which it is not. The restore
+merely **raced** the wipe: it won for months, started losing around 2026-09-26,
+and silently destroyed 52 contact names. A conditional restore is worse — when
+the re-read fails or returns stale data it skips the repair entirely.
+
+If a workaround's correctness depends on winning a race, it is not a fix.
+
+GC's response envelope also changed without notice in September 2026, which
+broke two parses in the sibling cPanel processor: the contact lookup silently
+found nothing (so merges ran blind) and successful creates were read as failures
+(so tags never fired, leaving consultation requests invisible for weeks). Parse
+defensively and prefer an exact email match over positional order.
 3. Failed submissions can be re-queued from the admin **Submissions** screen.
 
 ## Admin screens
@@ -350,7 +403,26 @@ For button-activated popups, the builder generates one combined **Copy Button Co
 - **Designed for expansion:** all routes under `/api/v1/`; API-key layer or v2 additions can be added later without moving endpoints.
 - **Version footer:** admin sidebar shows `gc-popup-manager v0.6.0`.
 
-### v0.5.2 — Unconditional GC field restoration
+### v0.7.0 — Full merged record on every GC write
+
+- **Root cause corrected.** Every GC write is a full-record upsert; omitted
+  fields are deleted synchronously. The previous "asynchronous wipe" diagnosis
+  was wrong, and the sleep-then-restore workaround built on it was racing the
+  wipe rather than repairing it.
+- `fireTag()` now accepts an optional fields object and carries
+  `name` / `firstName` / `lastName` / `phone` in the payload. This is the fix.
+- **`lastName` is now read and preserved** (`readLastName`), having been
+  silently deleted by every write that omitted it.
+- The post-fire sleep-and-restore is replaced by an **unconditional verify**:
+  compare what landed against what was sent, log and repair only on mismatch.
+- **A failed verify read no longer triggers a write.** Writing from an
+  unconfirmed state is how fields get blanked.
+- Documented that the existing-contact read must be allowed to throw so the
+  submission requeues instead of writing blind during an outage or rate limit.
+- Verified live: a name+email-only submission against a contact holding a phone
+  preserved the name, phone and lastName, and fired the tag.
+
+### v0.5.2 — Unconditional GC field restoration (superseded by v0.7.0)
 
 - **Critical fix:** phone/name wiped after tag-fire. Restoration is now unconditional — merged name and phone are always PUT back after tag-fire regardless of re-fetch result.
 - **GET relay body fix:** search passes `{email}`, get-by-ID passes `{}`, preventing GC v2 400 rejections.
