@@ -14,6 +14,7 @@ import {
   readName,
   readDisplayName,
   readPhone,
+  readLastName,
   contactId,
 } from '@/lib/gc';
 import { nowIso } from '@/lib/id';
@@ -50,12 +51,18 @@ async function processOne(id: string): Promise<void> {
 
   // b. Search for an existing contact by email. extractContacts inside the
   //    client already handles data.contacts / data.data / data / bare-array.
+  //
+  // CRITICAL: every GC write is a full-record upsert, so a field we cannot
+  // confirm is a field we would DELETE. If this read throws (outage, 429, 502,
+  // timeout) we must NOT fall through and write -- searchContactByEmail throws
+  // on a non-OK response, and runQueue's catch requeues the submission, which is
+  // exactly what we want. Never wrap this in a try/catch that yields null: a
+  // silent null reads as "no existing contact" and the following write would
+  // blank the stored name and phone.
   const existingContact = await searchContactByEmail(submission.email);
 
   // c. Merge: never overwrite existing name/phone with empty values.
-  // Preserve the full display `name` field separately from `firstName` --
-  // fire-tag on the live GC API is known to clear one or both, so both are
-  // tracked and restored independently below.
+  // Preserve the full display `name` field separately from `firstName`.
   const mergedFirstName = preferExisting(
     readName(existingContact),
     submission.firstName,
@@ -68,6 +75,9 @@ async function processOne(id: string): Promise<void> {
     readPhone(existingContact),
     submission.phone,
   );
+  // Our forms never collect a surname on its own, so lastName is preserve-only.
+  // It still has to travel on every write, because an omitted field is deleted.
+  const mergedLastName = readLastName(existingContact);
 
   // Send the full name as both `name` and `firstName` in the existing Global
   // Control shape. GC parses first/last from the full name; keeping firstName
@@ -78,6 +88,7 @@ async function processOne(id: string): Promise<void> {
     name: mergedDisplayName,
     phone: mergedPhone,
   };
+  if (mergedLastName) contactPayload.lastName = mergedLastName;
   if (submission.notes) contactPayload.notes = submission.notes;
 
   // d. Create or update the GC contact.
@@ -89,29 +100,50 @@ async function processOne(id: string): Promise<void> {
     gcId = contactId(created);
   }
 
-  // e. Fire the tag.
-  await fireTag(popup.gcTagId, submission.email);
+  // e. Fire the tag, CARRYING THE MERGED FIELDS.
+  // Fire-tag is a full-record upsert like every other GC write: firing with the
+  // email alone blanks name and phone as part of the call. Sending the merged
+  // record here is the fix, and it removes the need for any restore afterwards.
+  await fireTag(popup.gcTagId, submission.email, {
+    name: mergedDisplayName,
+    firstName: mergedFirstName,
+    lastName: mergedLastName,
+    phone: mergedPhone,
+  });
   submission.tagFired = true;
 
-  // f. Wait — fire-tag may asynchronously wipe fields on the GC side.
+  // f. Verify what actually landed. Nothing should need repairing now, but GC
+  // changed its write semantics once without notice, so we check rather than
+  // assume, and repair loudly if reality disagrees.
   await sleep(POST_TAG_DELAY_MS);
 
-  // g. Re-fetch the contact by id (fall back to email lookup if needed).
   let refetched = gcId ? await getContactById(gcId) : null;
   if (!refetched) {
     refetched = await searchContactByEmail(submission.email);
     if (!gcId) gcId = contactId(refetched);
   }
 
-  // h. Always restore the merged fields. GC may clear them after the
-  // re-fetch window, so a conditional restore leaves a race that can wipe data.
-  if (gcId) {
-    await updateContact(gcId, {
-      email: submission.email,
-      firstName: mergedFirstName,
-      name: mergedDisplayName,
-      phone: mergedPhone,
-    });
+  if (gcId && refetched) {
+    const landedName = readDisplayName(refetched).trim();
+    const landedPhone = readPhone(refetched).trim();
+    const wantName = mergedDisplayName.trim();
+    const wantPhone = mergedPhone.trim();
+
+    if (landedName !== wantName || landedPhone !== wantPhone) {
+      console.error(
+        `[gc] MISMATCH after tag fire for ${submission.email}: ` +
+          `expected name="${wantName}" phone="${wantPhone}", ` +
+          `got name="${landedName}" phone="${landedPhone}" -- rewriting full record`,
+      );
+      await updateContact(gcId, contactPayload);
+    }
+  } else if (gcId) {
+    // Could not read the record back. Do not write blind -- a write built on an
+    // unconfirmed state is how fields get blanked. Flag it and leave the data be.
+    console.error(
+      `[gc] post-tag verify read failed for ${submission.email}; ` +
+        `skipping repair write rather than risk blanking fields`,
+    );
   }
 
   // i. Mark processed.

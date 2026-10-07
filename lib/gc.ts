@@ -8,6 +8,8 @@ export interface GCContact {
   email?: string;
   firstName?: string;
   first_name?: string;
+  lastName?: string;
+  last_name?: string;
   name?: string;
   phone?: string;
   [key: string]: unknown;
@@ -174,11 +176,35 @@ export async function updateContact(
   return extractContact(payload);
 }
 
+// Fire a tag, carrying the contact fields with it.
+//
+// CRITICAL: every Global Control write is a FULL-RECORD UPSERT -- any field the
+// payload omits is DELETED. Firing with `{ email }` alone therefore wipes the
+// contact's name and phone, synchronously, as part of this very call (verified
+// 2026-10-06/07 against the live API). Passing the merged fields here is what
+// prevents the wipe; it is not a redundant belt-and-braces measure.
+//
+// Callers must pass values they have positively confirmed. Never pass an empty
+// string for a field that may hold data -- omit it instead, and only when the
+// caller knows the stored value is genuinely empty.
 export async function fireTag(
   tagId: string,
   email: string,
+  fields?: {
+    name?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+  },
 ): Promise<void> {
-  await req('POST', `/tags/fire-tag/${encodeURIComponent(tagId)}`, { email });
+  const payload: Record<string, unknown> = { email };
+  if (fields) {
+    if (fields.name) payload.name = fields.name;
+    if (fields.firstName) payload.firstName = fields.firstName;
+    if (fields.lastName) payload.lastName = fields.lastName;
+    if (fields.phone) payload.phone = fields.phone;
+  }
+  await req('POST', `/tags/fire-tag/${encodeURIComponent(tagId)}`, payload);
 }
 
 // Read firstName/phone from a contact regardless of field naming.
@@ -196,6 +222,15 @@ export function readDisplayName(contact: GCContact | null): string {
 export function readPhone(contact: GCContact | null): string {
   if (!contact) return '';
   return String(contact.phone || '');
+}
+
+// Read the separately-stored lastName. GC keeps firstName/lastName apart from the
+// display `name`, and because writes are full-record upserts, omitting lastName
+// DELETES it. Our forms only collect a single name string, so this is
+// preserve-only: we never set it, we just avoid destroying it.
+export function readLastName(contact: GCContact | null): string {
+  if (!contact) return '';
+  return String(contact.lastName || contact.last_name || '');
 }
 
 // Identify a GC contact's id, accepting either `id` or `_id` (some GC API
