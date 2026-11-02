@@ -74,6 +74,7 @@ interface DiscountOfferValue {
   expiryDays: string;
   codePrefix: string;
   combinesWithProduct: boolean;
+  replacesReferrerCode: boolean;
   dailyCap: string;
   shopUrl: string;
   errorText: string;
@@ -101,6 +102,7 @@ function emptyDiscountOffer(): DiscountOfferValue {
     expiryDays: "7",
     codePrefix: "GC-",
     combinesWithProduct: true,
+    replacesReferrerCode: false,
     dailyCap: "200",
     shopUrl: "",
     errorText: DEFAULT_DISCOUNT_ERROR_TEXT,
@@ -220,6 +222,7 @@ export function fromPopup(p: Popup): PopupFormValue {
           expiryDays: String(p.discountOffer.expiryDays),
           codePrefix: p.discountOffer.codePrefix,
           combinesWithProduct: p.discountOffer.combinesWithProduct,
+          replacesReferrerCode: p.discountOffer.replacesReferrerCode === true,
           dailyCap: String(p.discountOffer.dailyCap),
           shopUrl: p.discountOffer.shopUrl,
           errorText: p.discountOffer.errorText || DEFAULT_DISCOUNT_ERROR_TEXT,
@@ -255,6 +258,7 @@ export function toPayload(v: PopupFormValue): Record<string, unknown> {
     expiryDays: Number(d.expiryDays) || 7,
     codePrefix: d.codePrefix.trim().toUpperCase(),
     combinesWithProduct: d.combinesWithProduct,
+    replacesReferrerCode: d.replacesReferrerCode,
     dailyCap: d.dailyCap.trim() === "" ? 200 : Number(d.dailyCap) || 0,
     shopUrl: d.shopUrl.trim(),
     errorText: d.errorText.trim() || DEFAULT_DISCOUNT_ERROR_TEXT,
@@ -980,6 +984,17 @@ export default function PopupForm({
                       }
                     />
                     Combines with other product discounts (e.g. podcast codes)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={v.discountOffer.replacesReferrerCode}
+                      onChange={(e) =>
+                        setDiscount("replacesReferrerCode", e.target.checked)
+                      }
+                    />
+                    May replace a podcast code already in the cart (the
+                    referral is still recorded)
                   </label>
                   {v.discountOffer.type === "fixed" && (
                     <label className="flex items-center gap-2 text-sm text-gray-700">

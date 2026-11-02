@@ -99,6 +99,11 @@ export interface DiscountOffer {
   expiryDays: number; // default 7, 1-60
   codePrefix: string; // e.g. "LM-"
   combinesWithProduct: boolean; // default true (stacks with product discounts)
+  // When true, this popup's code may REPLACE a podcast/partner code already in
+  // the cart (the bigger discount wins; the referral is kept in the 90-day
+  // referrer cookie and GC "Referrer Code"). Default false: the cart keeps the
+  // partner code and says the new code needs its own order.
+  replacesReferrerCode: boolean;
   dailyCap: number; // max codes per offer per UTC day, default 200; 0 = paused
   shopUrl: string; // brand site URL for the "Shop now" button
   // Shown in the thank-you step when no code could be issued (Shopify failure,
@@ -204,6 +209,12 @@ export interface Submission {
   notes: string;
   // Arbitrary extra field values keyed by field key.
   extra?: Record<string, string>;
+  // Referral attribution captured by the mini-store cart (90-day first-touch
+  // cookie): the podcast/partner code the visitor arrived with, and an
+  // Affiliatly affiliate id. Optional; written to GC custom field "Referrer
+  // Code" by the queue processor when present.
+  referrerCode?: string;
+  referrerAff?: string;
   sourceDomain: string;
   sourceUrl: string;
   userAgent: string;
@@ -253,7 +264,12 @@ export interface PublicPopupConfig {
   style: PopupStyle;
   // Minimal public hint that a discount offer is available. Present ONLY when
   // the popup has an enabled discountOffer. Never exposes value, IDs or caps.
-  discount?: { enabled: true; shopUrl: string; errorText: string };
+  discount?: {
+    enabled: true;
+    shopUrl: string;
+    errorText: string;
+    replacesReferrerCode: boolean;
+  };
   // Present ONLY when the popup enables the switchable SMS form. Labels only.
   smsForm?: {
     mode: SmsFormMode;

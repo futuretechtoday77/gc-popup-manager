@@ -412,6 +412,28 @@ For button-activated popups, the builder generates one combined **Copy Button Co
   `process.env` and never appear in public config, the embed, or any response.
 - **Version footer:** admin sidebar shows `gc-popup-manager v0.8.0` (v0.8.1 after phase 3).
 
+### v0.8.2 — Referral attribution (Referrer Code + Affiliatly)
+
+- **Submissions carry referral data.** The mini-store cart keeps a 90-day,
+  first-touch cookie (`<pfx>_ref` = `v1|CODE|AFF|date`) from `?code=`, the `/sam`
+  shortlink cookie and `?aff=`, and exposes it as `window.GCPM_REFERRER`. The embed
+  sends `referrerCode` / `referrerAff`; `/api/submit` accepts them only in a strict
+  shape (`^[A-Z0-9][A-Z0-9-]{1,31}$`, digits) and stores them on the submission.
+- **GC "Referrer Code" custom field.** The queue processor writes it on the
+  contact create/update, first touch only. Verified against the live GC API: a
+  write that includes `meta` REPLACES the contact's entire custom-field list, so
+  `lib/gc-meta.ts` merges the new value into the list read from the existing
+  contact. If that list cannot be confirmed, nothing is sent. Without a referrer
+  the GC write is unchanged. `fire-tag` does not touch `meta`. Field id is
+  overridable with `GC_REFERRER_FIELD_ID`.
+- **Per-popup "May replace a podcast code".** `discountOffer.replacesReferrerCode`
+  (default off). When on, the claim's Shop link carries `code_replace=1` and the
+  cart lets the popup code win instead of restoring the partner code. The referral
+  stays in the cookie and in GC either way.
+- **Affiliatly across domains (cart side).** The cart appends `aff=<id>` to the
+  checkout URL. Shopify preserves it into `/checkouts/cn/...`, where Affiliatly's
+  pixel sets its cookie on the store domain before purchase.
+
 ### v0.8.1 — Popup thank-you step, SMS form, mini-store cart fix
 
 - **Thank-you step shows the code.** After a successful opt-in the embed calls

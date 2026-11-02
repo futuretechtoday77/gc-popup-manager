@@ -19,6 +19,12 @@ import {
 } from '@/lib/gc';
 import { nowIso } from '@/lib/id';
 import type { Submission } from '@/lib/types';
+import { readMeta, mergeFirstTouch } from '@/lib/gc-meta';
+
+// GC custom field "Referrer Code" (created by Joshua 2026-11-02). Override with
+// GC_REFERRER_FIELD_ID if the field is ever recreated.
+const REFERRER_FIELD_ID =
+  process.env.GC_REFERRER_FIELD_ID?.trim() || '6ae84e8209e13e74ea88bd7c';
 
 const BATCH_SIZE = 20;
 const MAX_RETRIES = 3;
@@ -90,6 +96,27 @@ async function processOne(id: string): Promise<void> {
   };
   if (mergedLastName) contactPayload.lastName = mergedLastName;
   if (submission.notes) contactPayload.notes = submission.notes;
+
+  // Referral attribution -> GC "Referrer Code" custom field.
+  // Sending `meta` replaces the contact's WHOLE custom-field list, so we only
+  // send it when there is a referrer to record, the existing list was read
+  // successfully, and the field is still empty (first touch keeps the credit).
+  // Without a referrer this block does nothing and the write is unchanged.
+  if (submission.referrerCode) {
+    const existingMeta = readMeta(existingContact);
+    if (existingMeta === null) {
+      console.warn(
+        `[gc] referrer not written for ${submission.id}: existing custom fields unreadable`,
+      );
+    } else {
+      const merged = mergeFirstTouch(
+        existingMeta,
+        REFERRER_FIELD_ID,
+        submission.referrerCode,
+      );
+      if (merged) contactPayload.meta = merged;
+    }
+  }
 
   // d. Create or update the GC contact.
   let gcId = contactId(existingContact);

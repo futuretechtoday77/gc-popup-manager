@@ -214,6 +214,12 @@ const SCRIPT = String.raw`(function () {
         }
 
         var payload = { popupId: popupId };
+        // Referral attribution set by the mini-store cart, if present.
+        var ref = window.GCPM_REFERRER;
+        if (ref && typeof ref === "object") {
+          if (ref.code) payload.referrerCode = String(ref.code);
+          if (ref.aff) payload.referrerAff = String(ref.aff);
+        }
         var inputs = form.querySelectorAll("[name]");
         var missing = false;
         for (var i = 0; i < inputs.length; i++) {

@@ -76,6 +76,16 @@ export async function POST(req: NextRequest) {
     phone: sanitize(body.phone, 60),
     notes: sanitize(body.notes, 2000),
     extra,
+    // Referral attribution from the mini-store cart. Strictly shaped so a
+    // visitor cannot inject arbitrary text into a CRM field.
+    referrerCode: /^[A-Z0-9][A-Z0-9-]{1,31}$/.test(
+      sanitize(body.referrerCode, 32).toUpperCase(),
+    )
+      ? sanitize(body.referrerCode, 32).toUpperCase()
+      : undefined,
+    referrerAff: /^[0-9]{1,10}$/.test(sanitize(body.referrerAff, 10))
+      ? sanitize(body.referrerAff, 10)
+      : undefined,
     sourceDomain: sourceHost || '',
     sourceUrl: sanitize(req.headers.get('referer'), 2000),
     userAgent: sanitize(req.headers.get('user-agent'), 500),

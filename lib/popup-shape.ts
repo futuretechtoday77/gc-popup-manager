@@ -507,6 +507,7 @@ export function validateDiscountOffer(raw: unknown): DiscountValidation {
       expiryDays: expiryDaysRaw,
       codePrefix,
       combinesWithProduct: boolField(o.combinesWithProduct, true),
+      replacesReferrerCode: boolField(o.replacesReferrerCode, false),
       dailyCap: dailyCapRaw,
       shopUrl,
       errorText,

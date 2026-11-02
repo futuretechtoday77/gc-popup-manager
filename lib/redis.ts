@@ -244,6 +244,7 @@ export function toPublicConfig(popup: Popup): PublicPopupConfig {
             shopUrl: popup.discountOffer.shopUrl,
             errorText:
               popup.discountOffer.errorText || DEFAULT_DISCOUNT_ERROR_TEXT,
+            replacesReferrerCode: popup.discountOffer.replacesReferrerCode === true,
           },
         }
       : {}),

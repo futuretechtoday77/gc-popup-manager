@@ -46,14 +46,20 @@ function clientIp(req: NextRequest): string {
 }
 
 // Append ?code= so the mini-store cart can read it.
-function appendCode(shopUrl: string, code: string): string {
+// When the offer may replace a podcast/partner code, add `code_replace=1` so
+// the mini-store cart lets this code win instead of protecting the partner code.
+function appendCode(shopUrl: string, code: string, replace = false): string {
   try {
     const u = new URL(shopUrl);
     u.searchParams.set("code", code);
+    if (replace) u.searchParams.set("code_replace", "1");
     return u.toString();
   } catch {
     const sep = shopUrl.includes("?") ? "&" : "?";
-    return `${shopUrl}${sep}code=${encodeURIComponent(code)}`;
+    return (
+      `${shopUrl}${sep}code=${encodeURIComponent(code)}` +
+      (replace ? "&code_replace=1" : "")
+    );
   }
 }
 
@@ -139,7 +145,7 @@ export async function POST(req: NextRequest) {
         status: "existing",
         code: existing.code,
         endsAt: existing.endsAt,
-        shopUrl: appendCode(offer.shopUrl, existing.code),
+        shopUrl: appendCode(offer.shopUrl, existing.code, offer.replacesReferrerCode === true),
       }),
     );
   }
@@ -155,7 +161,7 @@ export async function POST(req: NextRequest) {
           status: "existing",
           code: again.code,
           endsAt: again.endsAt,
-          shopUrl: appendCode(offer.shopUrl, again.code),
+          shopUrl: appendCode(offer.shopUrl, again.code, offer.replacesReferrerCode === true),
         }),
       );
     }
@@ -258,7 +264,7 @@ export async function POST(req: NextRequest) {
         status: "issued",
         code,
         endsAt: endsAtIso,
-        shopUrl: appendCode(offer.shopUrl, code),
+        shopUrl: appendCode(offer.shopUrl, code, offer.replacesReferrerCode === true),
       }),
     );
   } catch (err) {
