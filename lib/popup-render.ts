@@ -18,6 +18,16 @@ export interface RenderConfig {
   contentStyle?: PopupContentStyle;
   fields: PopupField[];
   style: PopupStyle;
+  // Optional switchable SMS variant. Email stays required in both modes because
+  // Global Control identifies every contact by email address.
+  smsForm?: {
+    enabled?: boolean;
+    mode?: "email-first" | "sms-first";
+    switchLabel?: string;
+    backLabel?: string;
+    phoneLabel?: string;
+    consentLabel?: string;
+  };
 }
 
 // Serialized into the embed script, so this function must only use arguments
@@ -217,7 +227,13 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
     btnBg +
     "33;}#gcpm-root textarea.gcpm-field{resize:vertical;min-height:70px;}#gcpm-root .gcpm-btn{width:100%;padding:12px;border:0;border-radius:8px;cursor:pointer;font-size:16px;font-weight:600;color:#fff;font-family:inherit;background:" +
     btnBg +
-    ";transition:filter .15s;}#gcpm-root .gcpm-btn:hover{filter:brightness(1.08);}#gcpm-root .gcpm-btn[disabled]{opacity:.65;cursor:default;}#gcpm-root .gcpm-msg{display:none;margin:0 0 10px;font-size:13px;color:#dc2626;}#gcpm-root .gcpm-thanks{text-align:center;padding:22px 6px;font-size:16px;font-weight:600;line-height:1.45;}";
+    ";transition:filter .15s;}#gcpm-root .gcpm-btn:hover{filter:brightness(1.08);}#gcpm-root .gcpm-btn[disabled]{opacity:.65;cursor:default;}#gcpm-root .gcpm-msg{display:none;margin:0 0 10px;font-size:13px;color:#dc2626;}#gcpm-root .gcpm-thanks{text-align:center;padding:22px 6px;font-size:16px;font-weight:600;line-height:1.45;}#gcpm-root .gcpm-code-wrap{margin:14px 0 12px;}#gcpm-root .gcpm-code{display:inline-block;padding:10px 16px;border:1.5px dashed " +
+    btnBg +
+    ";border-radius:8px;background:#f9fafb;color:#111;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:18px;font-weight:700;letter-spacing:.12em;user-select:all;-webkit-user-select:all;cursor:text;}#gcpm-root .gcpm-shop{display:inline-block;margin-top:2px;padding:11px 18px;border-radius:8px;background:" +
+    btnBg +
+    ";color:#fff;font-size:15px;font-weight:600;text-decoration:none;}#gcpm-root .gcpm-shop:hover{filter:brightness(1.08);}#gcpm-root .gcpm-hp{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;overflow:hidden!important;}#gcpm-root .gcpm-switch{display:block;width:100%;margin:0 0 10px;padding:6px 2px;border:0;background:none;color:" +
+    btnBg +
+    ";font-family:inherit;font-size:13.5px;font-weight:600;text-decoration:underline;cursor:pointer;text-align:left;}#gcpm-root .gcpm-consent{display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;font-size:12px;line-height:1.4;color:#374151;text-align:left;}#gcpm-root .gcpm-consent input{margin-top:2px;flex:0 0 auto;}#gcpm-root .gcpm-form[data-gcpm-mode=sms] .gcpm-only-email{display:none;}#gcpm-root .gcpm-form[data-gcpm-mode=email] .gcpm-only-sms{display:none;}";
   function inputFor(f: PopupField): string {
     var label = esc(f.label || f.key),
       placeholder = esc(f.placeholder || ""),
@@ -245,7 +261,10 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
           "/>";
   }
   var emailInput =
-    '<input class="gcpm-field" type="email" name="email" aria-label="Email" placeholder="Email address" required/>';
+    '<input class="gcpm-field gcpm-only-email" type="email" name="email" aria-label="Email" placeholder="Email address" required/>';
+  var smsForm = cfg.smsForm && cfg.smsForm.enabled ? cfg.smsForm : null;
+  var smsMode = smsForm && smsForm.mode === "sms-first" ? "sms-first" : "email-first";
+  var leadMode = smsMode === "sms-first" ? "sms" : "email";
   // Ordering rule: Name (if enabled) first, then Email, then the remaining
   // enabled fields in their configured order.
   var nameField: PopupField | null = null,
@@ -257,7 +276,29 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
   var fieldHtml = "";
   if (nameField) fieldHtml += inputFor(nameField);
   fieldHtml += emailInput;
+  var smsToggleHtml = "";
+  var smsExtraHtml = "";
+  if (smsForm) {
+    smsToggleHtml =
+      '<button type="button" class="gcpm-switch" data-gcpm-switch>' +
+      esc(leadMode === "sms" ? smsForm.backLabel : smsForm.switchLabel) +
+      "</button>";
+    smsExtraHtml =
+      '<div class="gcpm-only-sms">' +
+      '<input class="gcpm-field" type="tel" inputmode="tel" name="phone" aria-label="' +
+      esc(smsForm.phoneLabel) +
+      '" placeholder="' +
+      esc(smsForm.phoneLabel) +
+      '"/>' +
+      '<label class="gcpm-consent"><input type="checkbox" name="smsConsent" value="yes"/><span>' +
+      esc(smsForm.consentLabel) +
+      "</span></label></div>";
+  }
   for (var ri = 0; ri < rest.length; ri++) fieldHtml += inputFor(rest[ri]);
+  // A bot that fills this hidden field never gets submitted; the visitor sees
+  // the normal thank-you either way, so a bot learns nothing.
+  var honeypot =
+    '<div class="gcpm-hp" aria-hidden="true"><label>Company<input type="text" name="company" tabindex="-1" autocomplete="off"/></label></div>';
   var content =
     (cfg.headline
       ? '<h2 class="gcpm-headline">' + esc(cfg.headline) + "</h2>"
@@ -266,8 +307,13 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
       ? '<p class="gcpm-sub">' + esc(cfg.subHeadline) + "</p>"
       : "") +
     (cfg.bodyText ? '<p class="gcpm-text">' + esc(cfg.bodyText) + "</p>" : "") +
-    '<form class="gcpm-form" data-gcpm-form novalidate>' +
+    '<form class="gcpm-form" data-gcpm-form data-gcpm-mode="' +
+    leadMode +
+    '" novalidate>' +
     fieldHtml +
+    smsExtraHtml +
+    honeypot +
+    smsToggleHtml +
     '<div class="gcpm-msg" data-gcpm-msg></div><button type="submit" class="gcpm-btn" data-gcpm-submit>' +
     esc(cfg.buttonText || "Submit") +
     "</button></form>";
@@ -309,7 +355,10 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
 
 // Build the in-popup success notification markup from the configured success
 // text. Escapes content and converts newlines to <br>; never renders HTML.
-export function successHtml(text: string): string {
+export function successHtml(
+  text: string,
+  opts?: { code?: string; shopUrl?: string; shopLabel?: string },
+): string {
   function esc(v: any): string {
     return String(v == null ? "" : v)
       .replace(/&/g, "&amp;")
@@ -319,5 +368,21 @@ export function successHtml(text: string): string {
       .replace(/'/g, "&#39;");
   }
   var safe = esc(text).replace(/\n/g, "<br>");
-  return '<div class="gcpm-thanks" role="status">' + safe + "</div>";
+  var out = '<div class="gcpm-thanks" role="status">' + safe;
+  var code = opts && opts.code ? String(opts.code) : "";
+  if (code) {
+    out +=
+      '<div class="gcpm-code-wrap"><span class="gcpm-code" data-gcpm-code>' +
+      esc(code) +
+      "</span></div>";
+    if (opts && opts.shopUrl && /^https?:\/\//i.test(String(opts.shopUrl))) {
+      out +=
+        '<a class="gcpm-shop" data-gcpm-shop href="' +
+        esc(opts.shopUrl) +
+        '" rel="noopener">' +
+        esc((opts && opts.shopLabel) || "Shop now with my code") +
+        "</a>";
+    }
+  }
+  return out + "</div>";
 }

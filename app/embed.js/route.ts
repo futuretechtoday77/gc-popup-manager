@@ -83,6 +83,34 @@ const SCRIPT = String.raw`(function () {
       xhr.send(JSON.stringify(data));
     }
 
+    // Ask for the visitor's single-use code. The opt-in has already succeeded by
+    // now, so every failure here is soft: the visitor just sees the fallback text.
+    function claimCode(submissionId, cb) {
+      var xhr = new XMLHttpRequest();
+      var done = false;
+      function finish(err, data) {
+        if (done) return;
+        done = true;
+        cb(err, data);
+      }
+      xhr.open("POST", origin + "/api/discount/claim", true);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.timeout = 6000;
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) return;
+        var res = null;
+        try { res = JSON.parse(xhr.responseText); } catch (e) {}
+        finish(null, res || {});
+      };
+      xhr.ontimeout = function () { finish(new Error("timeout")); };
+      xhr.onerror = function () { finish(new Error("network")); };
+      try {
+        xhr.send(JSON.stringify({ submissionId: submissionId }));
+      } catch (e) {
+        finish(e);
+      }
+    }
+
     function fireTracking(raw) {
       if (!raw || typeof raw !== "string" || !raw.trim()) return;
       try {
@@ -153,30 +181,71 @@ const SCRIPT = String.raw`(function () {
       var body = root.querySelector(".gcpm-body");
       if (!form) return;
 
+      // Switchable email / SMS variant. Email stays in both forms: Global
+      // Control identifies every contact by email.
+      var smsCfg = cfg.smsForm || null;
+      var mode = form.getAttribute("data-gcpm-mode") === "sms" ? "sms" : "email";
+      var toggle = root.querySelector("[data-gcpm-switch]");
+      if (toggle && smsCfg) {
+        toggle.addEventListener("click", function () {
+          mode = mode === "sms" ? "email" : "sms";
+          form.setAttribute("data-gcpm-mode", mode);
+          toggle.textContent = mode === "sms" ? smsCfg.backLabel : smsCfg.switchLabel;
+          if (msg) msg.style.display = "none";
+          var first = root.querySelector(
+            mode === "sms" ? "[name=phone]" : "[name=email]"
+          );
+          if (first) try { first.focus(); } catch (e) {}
+        });
+      }
+
       form.addEventListener("submit", function (e) {
         e.preventDefault();
         if (state.submitting) return;
         if (msg) msg.style.display = "none";
+
+        // Bot trap: a real visitor never fills this hidden field. Show the
+        // normal thank-you so nothing is learned, and send nothing.
+        var hp = form.querySelector("[name=company]");
+        if (hp && String(hp.value || "").trim()) {
+          var trapTarget = body || root.querySelector(".gcpm-split-form") || root.querySelector(".gcpm-card");
+          if (trapTarget) trapTarget.innerHTML = successHtml("Thanks! Your submission was received.");
+          return;
+        }
 
         var payload = { popupId: popupId };
         var inputs = form.querySelectorAll("[name]");
         var missing = false;
         for (var i = 0; i < inputs.length; i++) {
           var inp = inputs[i];
+          if (inp.name === "company") continue;
+          if (inp.type === "checkbox") {
+            if (inp.name === "smsConsent" && mode === "sms") {
+              payload[inp.name] = inp.checked ? "yes" : "";
+              if (!inp.checked) missing = true;
+            }
+            continue;
+          }
           var val = (inp.value || "").trim();
           payload[inp.name] = val;
           if (inp.hasAttribute("required") && !val) missing = true;
         }
         if (!payload.email) missing = true;
+        if (mode === "sms" && !String(payload.phone || "").trim()) missing = true;
         if (missing) {
-          if (msg) { msg.textContent = "Please fill in the required fields."; msg.style.display = "block"; }
+          if (msg) {
+            msg.textContent = mode === "sms"
+              ? "Please enter your email, mobile number and tick the consent box."
+              : "Please fill in the required fields.";
+            msg.style.display = "block";
+          }
           return;
         }
 
         state.submitting = true;
         var orig = btn && btn.textContent;
         if (btn) { btn.disabled = true; btn.textContent = "Please wait\u2026"; }
-        submit(payload, function (err) {
+        submit(payload, function (err, res) {
           state.submitting = false;
           if (btn) { btn.disabled = false; btn.textContent = orig; }
           if (err) {
@@ -190,8 +259,32 @@ const SCRIPT = String.raw`(function () {
             return;
           }
           var target = body || root.querySelector(".gcpm-split-form") || root.querySelector(".gcpm-card");
-          if (target) target.innerHTML = successHtml(hasSuccessText ? successText : "Thanks! Your submission was received.");
+          var wantDiscount = !!(cfg.discount && cfg.discount.enabled && res && res.submissionId);
+          if (target) {
+            target.innerHTML = successHtml(
+              hasSuccessText ? successText : "Thanks! Your submission was received."
+            );
+          }
+          // Fire conversion tracking straight away: never delay it on Shopify.
           fireTracking(cfg.trackingScripts);
+          if (!wantDiscount) return;
+          claimCode(res.submissionId, function (cerr, cdata) {
+            var status = cdata && cdata.status;
+            var code = cdata && cdata.code;
+            if (!cerr && (status === "issued" || status === "existing") && code) {
+              if (target) {
+                target.innerHTML = successHtml(
+                  hasSuccessText ? successText : "Thanks! Your submission was received.",
+                  { code: code, shopUrl: cdata.shopUrl || "", shopLabel: "Shop now with my code" }
+                );
+              }
+              return;
+            }
+            if (status === "disabled") return;
+            var fallback = (cfg.discount && cfg.discount.errorText) ||
+              "Thanks! We couldn\u2019t generate your code just now \u2014 our team will follow up shortly.";
+            if (target) target.innerHTML = successHtml(fallback);
+          });
         });
       });
     }

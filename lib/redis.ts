@@ -9,6 +9,7 @@ import {
   UNCATEGORIZED_FOLDER_ID,
   UNCATEGORIZED_FOLDER_NAME,
   DEFAULT_SUCCESS_TEXT,
+  DEFAULT_DISCOUNT_ERROR_TEXT,
 } from "./types";
 import {
   normalizeButtonStyle,
@@ -18,6 +19,7 @@ import {
   normalizeSuccessText,
   normFields,
   normalizeDiscountOffer,
+  normalizeSmsForm,
 } from "./popup-shape";
 import {
   getSubmissionDiscount,
@@ -115,6 +117,9 @@ export function migratePopupFields(popup: any): Popup {
     style: migratedStyle,
     // Optional, back-compatible: undefined for popups with no offer.
     discountOffer: normalizeDiscountOffer(popup.discountOffer),
+    ...(popup.smsForm !== undefined
+      ? { smsForm: normalizeSmsForm(popup.smsForm) }
+      : {}),
   } as Popup;
 }
 
@@ -237,6 +242,19 @@ export function toPublicConfig(popup: Popup): PublicPopupConfig {
           discount: {
             enabled: true as const,
             shopUrl: popup.discountOffer.shopUrl,
+            errorText:
+              popup.discountOffer.errorText || DEFAULT_DISCOUNT_ERROR_TEXT,
+          },
+        }
+      : {}),
+    ...(popup.smsForm?.enabled
+      ? {
+          smsForm: {
+            mode: popup.smsForm.mode,
+            switchLabel: popup.smsForm.switchLabel,
+            backLabel: popup.smsForm.backLabel,
+            phoneLabel: popup.smsForm.phoneLabel,
+            consentLabel: popup.smsForm.consentLabel,
           },
         }
       : {}),

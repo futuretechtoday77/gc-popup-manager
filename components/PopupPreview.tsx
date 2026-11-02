@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildPopup } from "@/lib/popup-render";
+import { buildPopup, successHtml } from "@/lib/popup-render";
 import type {
   PopupField,
   PopupImageSettings,
@@ -22,6 +22,16 @@ export interface PreviewData {
   contentStyle: PopupContentStyle;
   fields: PopupField[];
   style: PopupStyle;
+  smsForm?: {
+    enabled: boolean;
+    mode: "email-first" | "sms-first";
+    switchLabel: string;
+    backLabel: string;
+    phoneLabel: string;
+    consentLabel: string;
+  };
+  // Admin-only: draw a mock code block so the thank-you step is visible.
+  showDiscountPreview?: boolean;
 }
 
 // A faint placeholder "page" behind the popup so it reads as a real overlay.
@@ -84,11 +94,23 @@ export default function PopupPreview({
     } catch {
       built = { css: "", html: "" };
     }
+    // Admin-only mock of the thank-you step, so the discount code block and
+    // Shop button are visible while editing. Never used by the real embed.
+    const thanks = data.showDiscountPreview
+      ? successHtml("Thanks! Your discount code is ready.", {
+          code: "SAMPLE-CODE",
+          shopUrl: "https://example.com/shop/",
+          shopLabel: "Shop now with my code",
+        })
+      : "";
+    const thanksCss = data.showDiscountPreview
+      ? '<style>#gcpm-root .gcpm-thanks{position:absolute;left:0;right:0;bottom:0;background:rgba(255,255,255,.97);border-top:1px solid #e5e7eb;padding:14px 10px;}</style>'
+      : "";
     return `<!doctype html><html><head><meta charset="utf-8"/>
       <meta name="viewport" content="width=${nativeWidth}, initial-scale=1"/>
       <style>html,body{margin:0;padding:0;background:#fff;height:100%;}
-      ${built.css}</style></head>
-      <body>${FAKE_PAGE}${built.html}</body></html>`;
+      ${built.css}</style>${thanksCss}</head>
+      <body>${FAKE_PAGE}${built.html}${thanks ? '<div id="gcpm-root">' + thanks + "</div>" : ""}</body></html>`;
   }, [data, nativeWidth]);
 
   return (

@@ -13,10 +13,13 @@ import type {
   PopupButtonStyle,
 } from "@/lib/types";
 import {
+  DEFAULT_DISCOUNT_ERROR_TEXT,
   DEFAULT_FIELDS,
+  DEFAULT_SMS_CONSENT,
   DEFAULT_SUCCESS_TEXT,
   UNCATEGORIZED_FOLDER_ID,
 } from "@/lib/types";
+import type { DiscountOffer, SmsFormSettings } from "@/lib/types";
 import {
   defaultButtonStyle,
   defaultContentStyle,
@@ -54,6 +57,72 @@ export interface PopupFormValue {
   thankYouUrl: string; // legacy redirect, retained for old popups
   allowedDomains: string; // newline/comma separated in the form
   style: { primaryColor: string; buttonColor: string; textColor: string };
+  discountOffer: DiscountOfferValue;
+  smsForm: SmsFormValue;
+}
+
+// Form-shaped discount offer (kept as plain strings/numbers for controlled inputs).
+interface DiscountOfferValue {
+  enabled: boolean;
+  type: "percent" | "fixed";
+  value: string;
+  appliesTo: "all" | "products" | "collections";
+  productIds: string; // one GID per line
+  collectionIds: string; // one GID per line
+  appliesOnEachItem: boolean;
+  minSubtotal: string;
+  expiryDays: string;
+  codePrefix: string;
+  combinesWithProduct: boolean;
+  dailyCap: string;
+  shopUrl: string;
+  errorText: string;
+}
+
+interface SmsFormValue {
+  enabled: boolean;
+  mode: "email-first" | "sms-first";
+  switchLabel: string;
+  backLabel: string;
+  phoneLabel: string;
+  consentLabel: string;
+}
+
+function emptyDiscountOffer(): DiscountOfferValue {
+  return {
+    enabled: false,
+    type: "percent",
+    value: "10",
+    appliesTo: "all",
+    productIds: "",
+    collectionIds: "",
+    appliesOnEachItem: false,
+    minSubtotal: "",
+    expiryDays: "7",
+    codePrefix: "GC-",
+    combinesWithProduct: true,
+    dailyCap: "200",
+    shopUrl: "",
+    errorText: DEFAULT_DISCOUNT_ERROR_TEXT,
+  };
+}
+
+function emptySmsForm(): SmsFormValue {
+  return {
+    enabled: false,
+    mode: "email-first",
+    switchLabel: "Prefer SMS?",
+    backLabel: "Prefer email?",
+    phoneLabel: "Mobile number",
+    consentLabel: DEFAULT_SMS_CONSENT,
+  };
+}
+
+function splitLines(s: string): string[] {
+  return s
+    .split(/[\n,]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
 }
 
 function cloneDefaults(): PopupField[] {
@@ -93,6 +162,8 @@ export function emptyForm(): PopupFormValue {
       buttonColor: "#22c55e",
       textColor: "#1a1a1a",
     },
+    discountOffer: emptyDiscountOffer(),
+    smsForm: emptySmsForm(),
   };
 }
 
@@ -133,15 +204,75 @@ export function fromPopup(p: Popup): PopupFormValue {
       buttonColor: p.style?.buttonColor || "#22c55e",
       textColor: p.style?.textColor || "#1a1a1a",
     },
+    discountOffer: p.discountOffer
+      ? {
+          enabled: p.discountOffer.enabled,
+          type: p.discountOffer.type,
+          value: String(p.discountOffer.value),
+          appliesTo: p.discountOffer.appliesTo,
+          productIds: (p.discountOffer.productIds || []).join("\n"),
+          collectionIds: (p.discountOffer.collectionIds || []).join("\n"),
+          appliesOnEachItem: p.discountOffer.appliesOnEachItem,
+          minSubtotal:
+            p.discountOffer.minSubtotal == null
+              ? ""
+              : String(p.discountOffer.minSubtotal),
+          expiryDays: String(p.discountOffer.expiryDays),
+          codePrefix: p.discountOffer.codePrefix,
+          combinesWithProduct: p.discountOffer.combinesWithProduct,
+          dailyCap: String(p.discountOffer.dailyCap),
+          shopUrl: p.discountOffer.shopUrl,
+          errorText: p.discountOffer.errorText || DEFAULT_DISCOUNT_ERROR_TEXT,
+        }
+      : emptyDiscountOffer(),
+    smsForm: p.smsForm
+      ? {
+          enabled: p.smsForm.enabled,
+          mode: p.smsForm.mode,
+          switchLabel: p.smsForm.switchLabel,
+          backLabel: p.smsForm.backLabel,
+          phoneLabel: p.smsForm.phoneLabel,
+          consentLabel: p.smsForm.consentLabel,
+        }
+      : emptySmsForm(),
   };
 }
 
 // Convert the form value into an API payload (domains -> array, re-index order).
 export function toPayload(v: PopupFormValue): Record<string, unknown> {
   const fields = v.fields.map((f, i) => ({ ...f, order: i }));
+  const d = v.discountOffer;
+  const discountOffer: DiscountOffer = {
+    enabled: d.enabled,
+    type: d.type,
+    value: Number(d.value) || 0,
+    appliesTo: d.appliesTo,
+    productIds: splitLines(d.productIds),
+    collectionIds: splitLines(d.collectionIds),
+    appliesOnEachItem: d.appliesOnEachItem,
+    minSubtotal:
+      d.minSubtotal.trim() === "" ? null : Number(d.minSubtotal) || 0,
+    expiryDays: Number(d.expiryDays) || 7,
+    codePrefix: d.codePrefix.trim().toUpperCase(),
+    combinesWithProduct: d.combinesWithProduct,
+    dailyCap: d.dailyCap.trim() === "" ? 200 : Number(d.dailyCap) || 0,
+    shopUrl: d.shopUrl.trim(),
+    errorText: d.errorText.trim() || DEFAULT_DISCOUNT_ERROR_TEXT,
+  };
+  const smsForm: SmsFormSettings = {
+    enabled: v.smsForm.enabled,
+    mode: v.smsForm.mode,
+    switchLabel: v.smsForm.switchLabel.trim() || "Prefer SMS?",
+    backLabel: v.smsForm.backLabel.trim() || "Prefer email?",
+    phoneLabel: v.smsForm.phoneLabel.trim() || "Mobile number",
+    consentLabel: v.smsForm.consentLabel.trim() || DEFAULT_SMS_CONSENT,
+  };
   return {
     ...v,
     fields,
+    // Only send an offer when it is switched on; null clears a removed offer.
+    discountOffer: discountOffer.enabled ? discountOffer : null,
+    smsForm,
     allowedDomains: v.allowedDomains
       .split(/[\n,]/)
       .map((d) => d.trim())
@@ -267,6 +398,20 @@ export default function PopupForm({
     }
   }
 
+  function setDiscount<K extends keyof DiscountOfferValue>(
+    key: K,
+    val: DiscountOfferValue[K],
+  ) {
+    setV((prev) => ({
+      ...prev,
+      discountOffer: { ...prev.discountOffer, [key]: val },
+    }));
+  }
+
+  function setSms<K extends keyof SmsFormValue>(key: K, val: SmsFormValue[K]) {
+    setV((prev) => ({ ...prev, smsForm: { ...prev.smsForm, [key]: val } }));
+  }
+
   function set<K extends keyof PopupFormValue>(key: K, val: PopupFormValue[K]) {
     setV((prev) => ({ ...prev, [key]: val }));
   }
@@ -338,6 +483,8 @@ export default function PopupForm({
       folderId: v.folderId,
       fields: v.fields.map((f, i) => ({ ...f, order: i })),
       style: v.style,
+      smsForm: v.smsForm,
+      showDiscountPreview: v.discountOffer.enabled,
     }),
     [v],
   );
@@ -638,6 +785,219 @@ export default function PopupForm({
             </div>
           </section>
 
+          {/* Discount offer */}
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-1 flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={v.discountOffer.enabled}
+                onClick={() => setDiscount("enabled", !v.discountOffer.enabled)}
+                className={
+                  "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition " +
+                  (v.discountOffer.enabled ? "bg-blue-600" : "bg-gray-300")
+                }
+              >
+                <span
+                  className={
+                    "inline-block h-4 w-4 transform rounded-full bg-white transition " +
+                    (v.discountOffer.enabled
+                      ? "translate-x-4"
+                      : "translate-x-0.5")
+                  }
+                />
+              </button>
+              <h2 className="font-semibold text-gray-900">Discount offer</h2>
+            </div>
+            <p className="mb-4 text-sm text-gray-500">
+              When a visitor opts in, a unique single-use Shopify code is
+              created. The thank-you step shows the code and a Shop now button.
+            </p>
+
+            {v.discountOffer.enabled && (
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label className={label}>Type</label>
+                    <select
+                      className={input}
+                      value={v.discountOffer.type}
+                      onChange={(e) =>
+                        setDiscount(
+                          "type",
+                          e.target.value === "fixed" ? "fixed" : "percent",
+                        )
+                      }
+                    >
+                      <option value="percent">Percent off</option>
+                      <option value="fixed">Fixed amount off</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={label}>
+                      {v.discountOffer.type === "percent"
+                        ? "Percent (1-90)"
+                        : "Amount in USD"}
+                    </label>
+                    <input
+                      className={input}
+                      value={v.discountOffer.value}
+                      onChange={(e) => setDiscount("value", e.target.value)}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>Expires after (days)</label>
+                    <input
+                      className={input}
+                      value={v.discountOffer.expiryDays}
+                      onChange={(e) => setDiscount("expiryDays", e.target.value)}
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label className={label}>Applies to</label>
+                    <select
+                      className={input}
+                      value={v.discountOffer.appliesTo}
+                      onChange={(e) =>
+                        setDiscount(
+                          "appliesTo",
+                          e.target.value === "products"
+                            ? "products"
+                            : e.target.value === "collections"
+                              ? "collections"
+                              : "all",
+                        )
+                      }
+                    >
+                      <option value="all">Whole order</option>
+                      <option value="products">Specific products</option>
+                      <option value="collections">Specific collections</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={label}>Code prefix</label>
+                    <input
+                      className={input}
+                      value={v.discountOffer.codePrefix}
+                      onChange={(e) => setDiscount("codePrefix", e.target.value)}
+                      placeholder="LM-"
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>Minimum order (USD, blank = none)</label>
+                    <input
+                      className={input}
+                      value={v.discountOffer.minSubtotal}
+                      onChange={(e) => setDiscount("minSubtotal", e.target.value)}
+                      inputMode="decimal"
+                    />
+                  </div>
+                </div>
+
+                {v.discountOffer.appliesTo === "products" && (
+                  <div>
+                    <label className={label}>
+                      Shopify product / variant IDs (one per line)
+                    </label>
+                    <textarea
+                      className={input + " min-h-24 font-mono text-xs"}
+                      value={v.discountOffer.productIds}
+                      onChange={(e) => setDiscount("productIds", e.target.value)}
+                      placeholder="gid://shopify/Product/1234567890"
+                      spellCheck={false}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Product or variant GIDs from Shopify.
+                    </p>
+                  </div>
+                )}
+
+                {v.discountOffer.appliesTo === "collections" && (
+                  <div>
+                    <label className={label}>
+                      Shopify collection IDs (one per line)
+                    </label>
+                    <textarea
+                      className={input + " min-h-24 font-mono text-xs"}
+                      value={v.discountOffer.collectionIds}
+                      onChange={(e) =>
+                        setDiscount("collectionIds", e.target.value)
+                      }
+                      placeholder="gid://shopify/Collection/1234567890"
+                      spellCheck={false}
+                    />
+                  </div>
+                )}
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className={label}>Shop link (Shop now button)</label>
+                    <input
+                      className={input}
+                      value={v.discountOffer.shopUrl}
+                      onChange={(e) => setDiscount("shopUrl", e.target.value)}
+                      placeholder="https://livemineral.com/shop/"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      The visitor&apos;s code is appended as ?code=, which the
+                      mini-store cart applies automatically.
+                    </p>
+                  </div>
+                  <div>
+                    <label className={label}>Daily cap (0 pauses the offer)</label>
+                    <input
+                      className={input}
+                      value={v.discountOffer.dailyCap}
+                      onChange={(e) => setDiscount("dailyCap", e.target.value)}
+                      inputMode="numeric"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={label}>
+                    Message when no code can be issued
+                  </label>
+                  <textarea
+                    className={input + " min-h-20"}
+                    value={v.discountOffer.errorText}
+                    onChange={(e) => setDiscount("errorText", e.target.value)}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-6 pt-1">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={v.discountOffer.combinesWithProduct}
+                      onChange={(e) =>
+                        setDiscount("combinesWithProduct", e.target.checked)
+                      }
+                    />
+                    Combines with other product discounts (e.g. podcast codes)
+                  </label>
+                  {v.discountOffer.type === "fixed" && (
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={v.discountOffer.appliesOnEachItem}
+                        onChange={(e) =>
+                          setDiscount("appliesOnEachItem", e.target.checked)
+                        }
+                      />
+                      Apply the amount to each item
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
           {/* Fields */}
           <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <h2 className="mb-1 font-semibold text-gray-900">Fields</h2>
@@ -746,6 +1106,98 @@ export default function PopupForm({
                 </div>
               ))}
             </div>
+          </section>
+
+          {/* SMS option */}
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-1 flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={v.smsForm.enabled}
+                onClick={() => setSms("enabled", !v.smsForm.enabled)}
+                className={
+                  "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition " +
+                  (v.smsForm.enabled ? "bg-blue-600" : "bg-gray-300")
+                }
+              >
+                <span
+                  className={
+                    "inline-block h-4 w-4 transform rounded-full bg-white transition " +
+                    (v.smsForm.enabled ? "translate-x-4" : "translate-x-0.5")
+                  }
+                />
+              </button>
+              <h2 className="font-semibold text-gray-900">SMS option</h2>
+            </div>
+            <p className="mb-4 text-sm text-gray-500">
+              Adds a switch to a phone form. Email is still collected in both
+              forms, because Global Control identifies every contact by email
+              address; a phone-only opt-in could not be synced or texted.
+            </p>
+
+            {v.smsForm.enabled && (
+              <div className="space-y-4">
+                <div>
+                  <label className={label}>Which form leads</label>
+                  <select
+                    className={input}
+                    value={v.smsForm.mode}
+                    onChange={(e) =>
+                      setSms(
+                        "mode",
+                        e.target.value === "sms-first" ? "sms-first" : "email-first",
+                      )
+                    }
+                  >
+                    <option value="email-first">
+                      Email form first, “Prefer SMS?” switch
+                    </option>
+                    <option value="sms-first">
+                      Phone form first, “Prefer email?” switch
+                    </option>
+                  </select>
+                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label className={label}>Switch to phone label</label>
+                    <input
+                      className={input}
+                      value={v.smsForm.switchLabel}
+                      onChange={(e) => setSms("switchLabel", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>Switch back to email label</label>
+                    <input
+                      className={input}
+                      value={v.smsForm.backLabel}
+                      onChange={(e) => setSms("backLabel", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>Phone field label</label>
+                    <input
+                      className={input}
+                      value={v.smsForm.phoneLabel}
+                      onChange={(e) => setSms("phoneLabel", e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={label}>Consent text (required for SMS)</label>
+                  <textarea
+                    className={input + " min-h-20"}
+                    value={v.smsForm.consentLabel}
+                    onChange={(e) => setSms("consentLabel", e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    The visitor must tick this box to submit the phone form.
+                    Keep the opt-out wording.
+                  </p>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Style */}

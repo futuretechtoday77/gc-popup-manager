@@ -410,7 +410,42 @@ For button-activated popups, the builder generates one combined **Copy Button Co
   (code, popupId, endsAt); no emails.
 - **Secrets stay server-side:** new `SHOPIFY_*` env vars are read only from
   `process.env` and never appear in public config, the embed, or any response.
-- **Version footer:** admin sidebar shows `gc-popup-manager v0.8.0`.
+- **Version footer:** admin sidebar shows `gc-popup-manager v0.8.0` (v0.8.1 after phase 3).
+
+### v0.8.1 — Popup thank-you step, SMS form, mini-store cart fix
+
+- **Thank-you step shows the code.** After a successful opt-in the embed calls
+  `POST /api/discount/claim {submissionId}` and, when a code comes back, renders
+  `successHtml(text, { code, shopUrl })`: the code in a selectable, letter-spaced
+  block plus a "Shop now with my code" button. The thanks message renders
+  **immediately** and is replaced when the code arrives, so a slow Shopify call
+  never looks like a broken form.
+- **Conversion tracking fires on submit**, not after the claim, so ad pixels are
+  never delayed by Shopify.
+- **Fallbacks.** `failed` / `capped` / `not_eligible` / a 6s client timeout /
+  a network error all render the offer's `errorText` instead of a code. `disabled`
+  leaves the plain thank-you. A visitor is never shown an error because Shopify
+  was slow.
+- **Switchable SMS form.** `smsForm { enabled, mode, switchLabel, backLabel,
+  phoneLabel, consentLabel }`. Two variants of the same form; only one visible at
+  a time, with a switch button. **Email stays required in both**, because Global
+  Control identifies every contact by email: a phone-only opt-in could never be
+  created in GC or texted by a GC workflow. The phone form adds a `tel` input and
+  a required consent checkbox (`smsConsent=yes`).
+- **Honeypot.** A hidden `company` field; when filled, nothing is submitted and
+  the visitor sees the ordinary thank-you, so a bot learns nothing.
+- **Public config** gains `discount.errorText` (when an offer is enabled) and
+  `smsForm` labels (when the SMS form is enabled). Offer value, product IDs, caps
+  and tag IDs stay server-side.
+- **Admin UI**: "Discount offer" and "SMS option" sections, both round-tripping
+  through create, edit and clone; the live preview shows a mock code block when an
+  offer is enabled.
+- **Mini-store carts (outside this repo).** `assets/cart.js` on each brand site
+  now APPENDS a code to the cart's existing codes instead of replacing the whole
+  list. Before this, applying a popup code silently dropped a podcaster's
+  SAM/TINFOIL code and its commission. If Shopify's combining rules refuse the
+  pair, the cart re-sends the original list and keeps the earlier code, telling
+  the visitor the new code needs its own order.
 
 ### v0.4.1 — Stretch split image panel
 

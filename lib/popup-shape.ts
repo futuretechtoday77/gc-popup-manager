@@ -11,11 +11,14 @@ import type {
   PopupTrigger,
   FieldKey,
   DiscountOffer,
+  SmsFormSettings,
 } from "./types";
 import {
   DEFAULT_FIELDS,
   DEFAULT_SUCCESS_TEXT,
   UNCATEGORIZED_FOLDER_ID,
+  DEFAULT_DISCOUNT_ERROR_TEXT,
+  DEFAULT_SMS_CONSENT,
 } from "./types";
 import { sanitize, slugify } from "./validate";
 import { nowIso } from "./id";
@@ -487,6 +490,9 @@ export function validateDiscountOffer(raw: unknown): DiscountValidation {
     };
   }
 
+  const errorText =
+    sanitize(o.errorText, 300) || DEFAULT_DISCOUNT_ERROR_TEXT;
+
   return {
     ok: true,
     value: {
@@ -503,6 +509,7 @@ export function validateDiscountOffer(raw: unknown): DiscountValidation {
       combinesWithProduct: boolField(o.combinesWithProduct, true),
       dailyCap: dailyCapRaw,
       shopUrl,
+      errorText,
     },
   };
 }
@@ -513,6 +520,36 @@ export function validateDiscountOffer(raw: unknown): DiscountValidation {
 export function normalizeDiscountOffer(raw: unknown): DiscountOffer | undefined {
   if (raw === null || raw === undefined) return undefined;
   const res = validateDiscountOffer(raw);
+  return res.ok ? res.value : undefined;
+}
+
+// Strict validation for the optional switchable SMS form. Labels are display
+// strings only; email stays required in both forms by design.
+export function validateSmsForm(
+  raw: unknown,
+): { ok: true; value: SmsFormSettings } | { ok: false; error: string } {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<
+    string,
+    unknown
+  >;
+  const mode = o.mode === "sms-first" ? "sms-first" : "email-first";
+  return {
+    ok: true,
+    value: {
+      enabled: boolField(o.enabled, false),
+      mode,
+      switchLabel: sanitize(o.switchLabel, 60) || "Prefer SMS?",
+      backLabel: sanitize(o.backLabel, 60) || "Prefer email?",
+      phoneLabel: sanitize(o.phoneLabel, 60) || "Mobile number",
+      consentLabel: sanitize(o.consentLabel, 200) || DEFAULT_SMS_CONSENT,
+    },
+  };
+}
+
+// Lenient normalization used on read/migration.
+export function normalizeSmsForm(raw: unknown): SmsFormSettings | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  const res = validateSmsForm(raw);
   return res.ok ? res.value : undefined;
 }
 
@@ -552,6 +589,9 @@ export function buildNewPopup(input: Record<string, unknown>): Popup {
     allowedDomains: normDomains(input.allowedDomains),
     style: normStyle(input.style),
     discountOffer: normalizeDiscountOffer(input.discountOffer),
+    ...(input.smsForm !== undefined
+      ? { smsForm: normalizeSmsForm(input.smsForm) }
+      : {}),
     createdAt: now,
     updatedAt: now,
   };
@@ -634,6 +674,9 @@ export function applyPopupUpdate(
     discountOffer: has("discountOffer")
       ? normalizeDiscountOffer(input.discountOffer)
       : existing.discountOffer,
+    ...(has("smsForm")
+      ? { smsForm: normalizeSmsForm(input.smsForm) }
+      : {}),
     updatedAt: nowIso(),
   };
 }

@@ -101,7 +101,29 @@ export interface DiscountOffer {
   combinesWithProduct: boolean; // default true (stacks with product discounts)
   dailyCap: number; // max codes per offer per UTC day, default 200; 0 = paused
   shopUrl: string; // brand site URL for the "Shop now" button
+  // Shown in the thank-you step when no code could be issued (Shopify failure,
+  // daily cap or an ineligible customer).
+  errorText: string;
 }
+
+// Optional switchable SMS variant of the opt-in form. Email stays required in
+// both forms: Global Control identifies every contact by email, so a phone-only
+// opt-in could never be synced or texted through GC.
+export type SmsFormMode = "email-first" | "sms-first";
+export interface SmsFormSettings {
+  enabled: boolean;
+  mode: SmsFormMode;
+  switchLabel: string;
+  backLabel: string;
+  phoneLabel: string;
+  consentLabel: string;
+}
+
+export const DEFAULT_SMS_CONSENT =
+  "Text me my discount code and occasional offers. Message frequency varies. Reply STOP to opt out.";
+
+export const DEFAULT_DISCOUNT_ERROR_TEXT =
+  "Thanks! We couldn't generate your code just now \u2014 our team will follow up shortly.";
 
 export interface Popup {
   id: string; // human-readable slug e.g. "rife-main-optin"
@@ -135,6 +157,7 @@ export interface Popup {
   // here; this only describes the offer. NEVER exposed publicly except the
   // minimal { enabled, shopUrl } surfaced by toPublicConfig when enabled.
   discountOffer?: DiscountOffer;
+  smsForm?: SmsFormSettings;
   createdAt: string;
   updatedAt: string;
 }
@@ -230,5 +253,13 @@ export interface PublicPopupConfig {
   style: PopupStyle;
   // Minimal public hint that a discount offer is available. Present ONLY when
   // the popup has an enabled discountOffer. Never exposes value, IDs or caps.
-  discount?: { enabled: true; shopUrl: string };
+  discount?: { enabled: true; shopUrl: string; errorText: string };
+  // Present ONLY when the popup enables the switchable SMS form. Labels only.
+  smsForm?: {
+    mode: SmsFormMode;
+    switchLabel: string;
+    backLabel: string;
+    phoneLabel: string;
+    consentLabel: string;
+  };
 }
