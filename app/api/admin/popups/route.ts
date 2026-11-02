@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { getAllPopups, savePopup, countSubmissionsForPopup } from '@/lib/redis';
 import { getPopup } from '@/lib/redis';
-import { buildNewPopup } from '@/lib/popup-shape';
+import { buildNewPopup, validateDiscountOffer } from '@/lib/popup-shape';
 import { json, error, unauthorized } from '@/lib/http';
 
 export const runtime = 'nodejs';
@@ -30,6 +30,10 @@ export async function POST(req: NextRequest) {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
     return error('Invalid JSON body', 400);
+  }
+  if (body.discountOffer != null) {
+    const v = validateDiscountOffer(body.discountOffer);
+    if (!v.ok) return error(v.error, 400);
   }
   const popup = buildNewPopup(body);
   const existing = await getPopup(popup.id);

@@ -43,6 +43,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       thankYouUrl: source.thankYouUrl || '',
       allowedDomains: [...source.allowedDomains],
       style: { ...source.style },
+      discountOffer: source.discountOffer
+        ? { ...source.discountOffer }
+        : undefined,
       createdAt: now,
       updatedAt: now,
     };

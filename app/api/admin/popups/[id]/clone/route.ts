@@ -49,6 +49,9 @@ export async function POST(
     thankYouUrl: source.thankYouUrl || "",
     allowedDomains: [...source.allowedDomains],
     style: { ...source.style },
+    discountOffer: source.discountOffer
+      ? { ...source.discountOffer }
+      : undefined,
     createdAt: now,
     updatedAt: now,
   };

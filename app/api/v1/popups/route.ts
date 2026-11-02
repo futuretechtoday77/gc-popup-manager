@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { error, json, unauthorized } from '@/lib/http';
 import { getAllPopups, getPopup, savePopup } from '@/lib/redis';
-import { buildNewPopup } from '@/lib/popup-shape';
+import { buildNewPopup, validateDiscountOffer } from '@/lib/popup-shape';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +24,10 @@ export async function POST(req: NextRequest) {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
     return error('Invalid JSON body', 400);
+  }
+  if (body.discountOffer != null) {
+    const v = validateDiscountOffer(body.discountOffer);
+    if (!v.ok) return error(v.error, 400);
   }
   try {
     const popup = buildNewPopup(body);

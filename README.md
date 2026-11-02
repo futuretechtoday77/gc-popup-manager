@@ -93,8 +93,17 @@ needed — the same Upstash Redis instance is reused.
 | `NEXT_PUBLIC_APP_URL`      | optional    | Public origin used when building embed snippets (auto-detected from request headers if omitted) |
 | `NEXT_PUBLIC_APP_VERSION`  | optional    | Version string shown in the admin sidebar footer (defaults to `v0.4.1` if not set) |
 | `BLOB_READ_WRITE_TOKEN`    | yes         | Vercel Blob store token for image uploads (see Image Storage section)                           |
+| `SHOPIFY_STORE_DOMAIN`     | discounts   | **Server-only.** Shop domain, e.g. `earthlygifts.myshopify.com`                                 |
+| `SHOPIFY_CLIENT_ID`        | discounts   | **Server-only.** Shopify app client id (client-credentials grant)                               |
+| `SHOPIFY_CLIENT_SECRET`    | discounts   | **Server-only.** Shopify app client secret                                                      |
+| `SHOPIFY_API_VERSION`      | optional    | Shopify Admin API version (defaults to `2026-10`)                                               |
 
 Copy `.env.example` to `.env.local` for local development.
+
+> The `SHOPIFY_*` values are **server-only secrets**. They are read exclusively
+> from `process.env` in server code and are never placed in public config, the
+> embed, or any response. They are only required if a popup uses a discount
+> offer.
 
 ## Deploy to Vercel
 
@@ -237,6 +246,90 @@ found nothing (so merges ran blind) and successful creates were read as failures
 defensively and prefer an exact email match over positional order.
 3. Failed submissions can be re-queued from the admin **Submissions** screen.
 
+## Shopify discount codes
+
+A popup can carry an optional **discount offer** (`discountOffer` on the popup).
+When enabled, a successful opt-in's thank-you step can claim a **unique,
+single-use Shopify discount code** valid for a configurable number of days.
+
+This flow is **completely separate from `/api/submit` and the Global Control
+queue**. A Shopify failure never affects the opt-in — the submit endpoint and
+the GC queue are untouched by it.
+
+Popups without an enabled `discountOffer` behave exactly as before and expose
+nothing new. Public config only ever gains a minimal
+`discount: { enabled: true, shopUrl }` hint, and only when an offer is enabled —
+never the value, product/collection IDs, or caps.
+
+### Claim flow — `POST /api/discount/claim`
+
+Public endpoint (same CORS + Origin/Referer allow-list as `/api/submit`). Body:
+`{ submissionId }`. The visitor's email is read **from the stored submission**,
+never from the request.
+
+1. Load the submission; it must exist and be **< 15 minutes old** (`404`/`410`).
+2. Load its popup. No enabled offer → `{ status: "disabled" }`.
+3. **Per-IP rate limit:** max 5 claims per IP per hour → `429`.
+4. **Idempotency / one-per-email-per-offer:** a live code for this
+   email+offer is returned as `{ status: "existing", ... }`. A short Redis lock
+   (`SET NX EX 15`) prevents a double-click issuing two codes.
+5. **Daily cap per offer** (`dailyCap`, per UTC day; `0` pauses the offer) →
+   `{ status: "capped" }`.
+6. **First-order check** (`read_customers`): existing customers with any order
+   are `{ status: "not_eligible" }`. If the check itself fails or times out we
+   **fail open** and still issue the code (logged server-side).
+7. Create the code (4s budget; one retry on a code collision). On success:
+   `{ status: "issued", code, endsAt, shopUrl }` where `shopUrl` has
+   `?code=<code>` appended.
+8. **Any Shopify failure returns `{ status: "failed" }` with HTTP 200** — never
+   a 5xx — and is logged server-side. The opt-in is never blocked.
+
+The response only ever contains `status`, `code`, `endsAt`, and `shopUrl`.
+
+Offers are validated strictly on save (admin + `/api/v1/popups*`): invalid
+offers are rejected with `400` and a clear message.
+
+### Registry, cleanup, and the safety rule
+
+Every code GCPM creates is recorded in a Redis registry, and every GCPM discount
+title starts with `GCPM · `.
+
+`GET|POST /api/cron/discount-cleanup` (auth: `Authorization: Bearer
+${CRON_SECRET}`, exactly like `/api/cron/process-queue`) deletes **only codes
+GCPM created**. A code is deleted only if **both** (a) it is in our registry
+**and** (b) its live Shopify title still starts with `GCPM · `, re-verified
+immediately before each delete. It processes at most 50 per run and only entries
+whose `endsAt` is older than the grace window.
+
+- `?graceDays=` — override the default 30-day grace (entries older than
+  `now - graceDays` are eligible).
+- `?dryRun=1` — report what *would* be deleted without deleting.
+- If Shopify says a discount no longer exists, its registry entry is dropped.
+
+The store holds ~400 other discounts (including affiliate podcast codes such as
+`SAM`/`TINFOIL`); the registry + title-prefix double check means cleanup can
+**never** list-and-delete by code pattern alone.
+
+> **Scheduling is external.** There is intentionally **no Vercel cron entry** for
+> `discount-cleanup` — schedule it from your own scheduler, calling the route
+> with the `CRON_SECRET` bearer token.
+
+`GET /api/v1/discounts?popupId=` (JWT-protected, like the other v1 routes) lists
+registry entries (`code`, `popupId`, `endsAt`). It never returns emails.
+
+### Discount Redis keys
+
+| Key                                      | Type       | Purpose                                              |
+| ---------------------------------------- | ---------- | ---------------------------------------------------- |
+| `gcpm:shopify:token`                     | string     | Cached Shopify access token (TTL `expires_in - 600`) |
+| `gcpm:disc:email:{popupId}:{sha256}`     | string     | Issued code per email+offer (idempotency)            |
+| `gcpm:disc:lock:{popupId}:{sha256}`      | string     | Short claim lock (`SET NX EX 15`)                    |
+| `gcpm:disc:cap:{popupId}:{YYYYMMDD}`     | string     | Per-offer per-UTC-day issued counter                 |
+| `gcpm:disc:rate:{ip}`                    | string     | Per-IP hourly claim counter                          |
+| `gcpm:disc:registry`                     | sorted set | Member = discountId, score = `endsAt` epoch ms       |
+| `gcpm:disc:meta:{discountId}`            | string     | `{ code, popupId, endsAt }` for a registry entry     |
+| `gcpm:disc:sub:{submissionId}`           | string     | `{ discount, discountStatus }` overlaid onto the submission on read (keeps the claim flow out of `submission:{id}`, which the GC queue owns) |
+
 ## Admin screens
 
 - `/admin` — login
@@ -293,6 +386,31 @@ For button-activated popups, the builder generates one combined **Copy Button Co
 ---
 
 ## Release notes
+
+### v0.8.0 — Shopify discount codes (backend)
+
+- **Discount offers:** optional `discountOffer` on a popup (type/value,
+  products/collections scope, min subtotal, expiry, code prefix, daily cap,
+  combines-with, shop URL). Optional and fully back-compatible; validated
+  strictly on save in both the admin and `/api/v1/popups*` endpoints.
+- **Claim endpoint:** `POST /api/discount/claim` issues a unique, single-use
+  Shopify code to a recent opt-in. Public, CORS + Origin/Referer checked. Email
+  is read from the stored submission, never the request. Per-IP rate limit,
+  one-code-per-email-per-offer idempotency with a short lock, per-offer daily
+  cap, and a fail-open first-order check.
+- **Never blocks the opt-in:** `/api/submit`, `lib/queue-processor.ts` and
+  `lib/gc.ts` are untouched. Any Shopify failure returns `{ status: "failed" }`
+  with HTTP 200, logged server-side.
+- **Safe cleanup:** `GET|POST /api/cron/discount-cleanup` (CRON_SECRET bearer)
+  deletes only codes GCPM created — recorded in our registry **and** whose live
+  Shopify title still starts with `GCPM · `, re-verified before each delete.
+  Max 50/run, `?graceDays=`, `?dryRun=1`. No Vercel cron entry (scheduled
+  externally).
+- **v1 listing:** `GET /api/v1/discounts?popupId=` lists registry entries
+  (code, popupId, endsAt); no emails.
+- **Secrets stay server-side:** new `SHOPIFY_*` env vars are read only from
+  `process.env` and never appear in public config, the embed, or any response.
+- **Version footer:** admin sidebar shows `gc-popup-manager v0.8.0`.
 
 ### v0.4.1 — Stretch split image panel
 

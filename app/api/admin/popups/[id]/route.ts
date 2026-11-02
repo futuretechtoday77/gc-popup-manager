@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { getPopup, savePopup, countSubmissionsForPopup } from '@/lib/redis';
-import { applyPopupUpdate } from '@/lib/popup-shape';
+import { applyPopupUpdate, validateDiscountOffer } from '@/lib/popup-shape';
 import { json, error, unauthorized } from '@/lib/http';
 
 export const runtime = 'nodejs';
@@ -32,6 +32,10 @@ export async function PUT(
     body = (await req.json()) as Record<string, unknown>;
   } catch {
     return error('Invalid JSON body', 400);
+  }
+  if (body.discountOffer != null) {
+    const v = validateDiscountOffer(body.discountOffer);
+    if (!v.ok) return error(v.error, 400);
   }
   const updated = applyPopupUpdate(existing, body);
   await savePopup(updated);

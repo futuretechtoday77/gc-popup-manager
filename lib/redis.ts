@@ -17,7 +17,13 @@ import {
   normalizeTrigger,
   normalizeSuccessText,
   normFields,
+  normalizeDiscountOffer,
 } from "./popup-shape";
+import {
+  getSubmissionDiscount,
+  getSubmissionDiscounts,
+  type SubmissionDiscountState,
+} from "./discount";
 
 let _redis: Redis | null = null;
 
@@ -107,6 +113,8 @@ export function migratePopupFields(popup: any): Popup {
     thankYouUrl:
       typeof popup.thankYouUrl === "string" ? popup.thankYouUrl : "",
     style: migratedStyle,
+    // Optional, back-compatible: undefined for popups with no offer.
+    discountOffer: normalizeDiscountOffer(popup.discountOffer),
   } as Popup;
 }
 
@@ -222,6 +230,16 @@ export function toPublicConfig(popup: Popup): PublicPopupConfig {
     // Legacy redirect target retained only for old popups that set it.
     thankYouUrl: popup.thankYouUrl || "",
     style: popup.style,
+    // Only surface a minimal discount hint when an enabled offer exists.
+    // Popups without an enabled offer get no new keys at all (rule 2).
+    ...(popup.discountOffer?.enabled
+      ? {
+          discount: {
+            enabled: true as const,
+            shopUrl: popup.discountOffer.shopUrl,
+          },
+        }
+      : {}),
   };
 }
 
@@ -235,9 +253,53 @@ export async function saveSubmission(sub: Submission): Promise<void> {
   });
 }
 
-export async function getSubmission(id: string): Promise<Submission | null> {
+// Merge discount state (stored in its own key) onto a submission. The claim
+// flow never writes submission:{id}, so these fields live separately and are
+// overlaid here on read.
+function mergeDiscount(
+  sub: Submission,
+  state: SubmissionDiscountState | null | undefined,
+): Submission {
+  if (!state) return sub;
+  return {
+    ...sub,
+    ...(state.discount !== undefined ? { discount: state.discount } : {}),
+    ...(state.discountStatus !== undefined
+      ? { discountStatus: state.discountStatus }
+      : {}),
+  };
+}
+
+// Batch overlay for list readers — one MGET, never a per-item round trip.
+// Tolerant: on any failure, returns the submissions unmodified.
+async function overlayDiscounts(subs: Submission[]): Promise<Submission[]> {
+  if (subs.length === 0) return subs;
+  try {
+    const states = await getSubmissionDiscounts(subs.map((s) => s.id));
+    return subs.map((s) => mergeDiscount(s, states.get(s.id)));
+  } catch (err) {
+    console.error("[redis] batch discount overlay failed", err);
+    return subs;
+  }
+}
+
+// Raw submission read with no discount overlay.
+async function getRawSubmission(id: string): Promise<Submission | null> {
   const redis = getRedis();
   return coerce<Submission>(await redis.get(keys.submission(id)));
+}
+
+export async function getSubmission(id: string): Promise<Submission | null> {
+  const sub = await getRawSubmission(id);
+  if (!sub) return sub;
+  // Tolerant overlay: the queue processor also calls getSubmission, so a
+  // throwing overlay must never break that path.
+  try {
+    return mergeDiscount(sub, await getSubmissionDiscount(id));
+  } catch (err) {
+    console.error("[redis] discount overlay failed for", id, err);
+    return sub;
+  }
 }
 
 export async function getSubmissionIdsForPopup(
@@ -255,8 +317,9 @@ export async function getSubmissionsForPopup(
   popupId: string,
 ): Promise<Submission[]> {
   const ids = await getSubmissionIdsForPopup(popupId);
-  const subs = await Promise.all(ids.map((id) => getSubmission(id)));
-  return subs.filter((s): s is Submission => s !== null);
+  const subs = await Promise.all(ids.map((id) => getRawSubmission(id)));
+  const present = subs.filter((s): s is Submission => s !== null);
+  return overlayDiscounts(present);
 }
 
 export async function countSubmissionsForPopup(

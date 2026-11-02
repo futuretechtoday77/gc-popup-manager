@@ -10,6 +10,7 @@ import type {
   PopupTemplate,
   PopupTrigger,
   FieldKey,
+  DiscountOffer,
 } from "./types";
 import {
   DEFAULT_FIELDS,
@@ -336,6 +337,185 @@ function normDomains(v: unknown): string[] {
     .filter((d) => d.length > 0);
 }
 
+// ---- Discount offer ----
+
+const PRODUCT_GID_RE = /^gid:\/\/shopify\/Product\/[^/]+$/;
+const VARIANT_GID_RE = /^gid:\/\/shopify\/ProductVariant\/[^/]+$/;
+const COLLECTION_GID_RE = /^gid:\/\/shopify\/Collection\/[^/]+$/;
+// Prefix as authored by the admin, e.g. "LM-" (the trailing dash is optional).
+const CODE_PREFIX_RE = /^[A-Z0-9]{1,8}-?$/;
+
+function toStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  for (const item of v) {
+    const s = sanitize(item, 200);
+    if (s) out.push(s);
+  }
+  return out;
+}
+
+type DiscountValidation =
+  | { ok: true; value: DiscountOffer }
+  | { ok: false; error: string };
+
+// Strictly validate a discount offer from request input. Returns a normalized,
+// canonical DiscountOffer on success, or a clear error message to surface as a
+// 400 on save. Used by the admin + v1 popup create/update endpoints.
+export function validateDiscountOffer(raw: unknown): DiscountValidation {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "discountOffer must be an object" };
+  }
+  const o = raw as Record<string, unknown>;
+
+  if (o.type !== "percent" && o.type !== "fixed") {
+    return {
+      ok: false,
+      error: 'discountOffer.type must be "percent" or "fixed"',
+    };
+  }
+  const type = o.type;
+
+  const value = Number(o.value);
+  if (!Number.isFinite(value)) {
+    return { ok: false, error: "discountOffer.value must be a number" };
+  }
+  if (type === "percent") {
+    if (!(value >= 1 && value <= 90)) {
+      return {
+        ok: false,
+        error: "discountOffer.value (percent) must be between 1 and 90",
+      };
+    }
+  } else if (!(value > 0)) {
+    return {
+      ok: false,
+      error: "discountOffer.value (fixed) must be greater than 0",
+    };
+  }
+
+  if (
+    o.appliesTo !== "all" &&
+    o.appliesTo !== "products" &&
+    o.appliesTo !== "collections"
+  ) {
+    return {
+      ok: false,
+      error: 'discountOffer.appliesTo must be "all", "products" or "collections"',
+    };
+  }
+  const appliesTo = o.appliesTo;
+
+  const productIds = toStringArray(o.productIds);
+  const collectionIds = toStringArray(o.collectionIds);
+  for (const gid of productIds) {
+    if (!PRODUCT_GID_RE.test(gid) && !VARIANT_GID_RE.test(gid)) {
+      return {
+        ok: false,
+        error: `discountOffer.productIds contains an invalid Product/ProductVariant GID: ${gid}`,
+      };
+    }
+  }
+  for (const gid of collectionIds) {
+    if (!COLLECTION_GID_RE.test(gid)) {
+      return {
+        ok: false,
+        error: `discountOffer.collectionIds contains an invalid Collection GID: ${gid}`,
+      };
+    }
+  }
+  if (appliesTo === "products" && productIds.length === 0) {
+    return {
+      ok: false,
+      error: 'discountOffer.productIds is required when appliesTo is "products"',
+    };
+  }
+  if (appliesTo === "collections" && collectionIds.length === 0) {
+    return {
+      ok: false,
+      error:
+        'discountOffer.collectionIds is required when appliesTo is "collections"',
+    };
+  }
+
+  const expiryDaysRaw = o.expiryDays === undefined ? 7 : Number(o.expiryDays);
+  if (
+    !Number.isInteger(expiryDaysRaw) ||
+    expiryDaysRaw < 1 ||
+    expiryDaysRaw > 60
+  ) {
+    return {
+      ok: false,
+      error: "discountOffer.expiryDays must be an integer between 1 and 60",
+    };
+  }
+
+  const codePrefix = sanitize(o.codePrefix, 16).toUpperCase();
+  if (!CODE_PREFIX_RE.test(codePrefix)) {
+    return {
+      ok: false,
+      error:
+        "discountOffer.codePrefix must be 1-8 uppercase letters/digits with an optional trailing dash (e.g. LM-)",
+    };
+  }
+
+  let minSubtotal: number | null = null;
+  if (o.minSubtotal !== null && o.minSubtotal !== undefined && o.minSubtotal !== "") {
+    const m = Number(o.minSubtotal);
+    if (!Number.isFinite(m) || m < 0) {
+      return {
+        ok: false,
+        error: "discountOffer.minSubtotal must be a non-negative number or null",
+      };
+    }
+    minSubtotal = m;
+  }
+
+  const dailyCapRaw = o.dailyCap === undefined ? 200 : Number(o.dailyCap);
+  if (!Number.isInteger(dailyCapRaw) || dailyCapRaw < 0) {
+    return {
+      ok: false,
+      error: "discountOffer.dailyCap must be a non-negative integer (0 pauses the offer)",
+    };
+  }
+
+  const shopUrl = sanitize(o.shopUrl, 2000);
+  if (!shopUrl || !/^https?:\/\//i.test(shopUrl)) {
+    return {
+      ok: false,
+      error: "discountOffer.shopUrl must be an absolute http(s) URL",
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      enabled: boolField(o.enabled, false),
+      type,
+      value,
+      appliesTo,
+      productIds,
+      collectionIds,
+      appliesOnEachItem: boolField(o.appliesOnEachItem, false),
+      minSubtotal,
+      expiryDays: expiryDaysRaw,
+      codePrefix,
+      combinesWithProduct: boolField(o.combinesWithProduct, true),
+      dailyCap: dailyCapRaw,
+      shopUrl,
+    },
+  };
+}
+
+// Lenient normalization used on read/migration and when building a popup from
+// already-validated input. Returns undefined when there is no offer or it is
+// not recoverable (strict validation at save time is the real gatekeeper).
+export function normalizeDiscountOffer(raw: unknown): DiscountOffer | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  const res = validateDiscountOffer(raw);
+  return res.ok ? res.value : undefined;
+}
+
 // Build a brand new popup from request input.
 export function buildNewPopup(input: Record<string, unknown>): Popup {
   const now = nowIso();
@@ -371,6 +551,7 @@ export function buildNewPopup(input: Record<string, unknown>): Popup {
     thankYouUrl: sanitize(input.thankYouUrl, 2000),
     allowedDomains: normDomains(input.allowedDomains),
     style: normStyle(input.style),
+    discountOffer: normalizeDiscountOffer(input.discountOffer),
     createdAt: now,
     updatedAt: now,
   };
@@ -449,6 +630,10 @@ export function applyPopupUpdate(
       ? normDomains(input.allowedDomains)
       : existing.allowedDomains,
     style: has("style") ? normStyle(input.style) : existing.style,
+    // Setting discountOffer to null/undefined clears it; an object replaces it.
+    discountOffer: has("discountOffer")
+      ? normalizeDiscountOffer(input.discountOffer)
+      : existing.discountOffer,
     updatedAt: nowIso(),
   };
 }

@@ -81,6 +81,28 @@ export const UNCATEGORIZED_FOLDER_NAME = "Uncategorized";
 
 export const DEFAULT_SUCCESS_TEXT = "Thanks! Your submission was received.";
 
+// A Shopify discount offer attached to a popup. When enabled, a successful
+// opt-in can claim a unique, single-use Shopify discount code via
+// /api/discount/claim. Optional and fully back-compatible: popups without a
+// discountOffer behave exactly as before and expose nothing new publicly.
+export interface DiscountOffer {
+  enabled: boolean;
+  type: "percent" | "fixed";
+  value: number; // percent 1-90, or dollars > 0
+  appliesTo: "all" | "products" | "collections";
+  // Shopify GIDs: products or variants
+  // (gid://shopify/Product/.. or gid://shopify/ProductVariant/..).
+  productIds: string[];
+  collectionIds: string[]; // gid://shopify/Collection/..
+  appliesOnEachItem: boolean; // fixed only
+  minSubtotal: number | null; // dollars
+  expiryDays: number; // default 7, 1-60
+  codePrefix: string; // e.g. "LM-"
+  combinesWithProduct: boolean; // default true (stacks with product discounts)
+  dailyCap: number; // max codes per offer per UTC day, default 200; 0 = paused
+  shopUrl: string; // brand site URL for the "Shop now" button
+}
+
 export interface Popup {
   id: string; // human-readable slug e.g. "rife-main-optin"
   name: string;
@@ -109,6 +131,10 @@ export interface Popup {
   thankYouUrl: string;
   allowedDomains: string[]; // NEVER exposed publicly
   style: PopupStyle;
+  // Optional Shopify discount offer. Secrets (store creds) are never stored
+  // here; this only describes the offer. NEVER exposed publicly except the
+  // minimal { enabled, shopUrl } surfaced by toPublicConfig when enabled.
+  discountOffer?: DiscountOffer;
   createdAt: string;
   updatedAt: string;
 }
@@ -165,6 +191,21 @@ export interface Submission {
   tagFired: boolean;
   processedAt: string | null;
   error: string | null;
+  // Shopify discount issued for this submission, if any. Admin-only; never
+  // returned by the public config endpoint.
+  discount?: {
+    code: string;
+    endsAt: string;
+    discountId: string;
+    issuedAt: string;
+  } | null;
+  discountStatus?:
+    | "issued"
+    | "existing"
+    | "not_eligible"
+    | "failed"
+    | "capped"
+    | "disabled";
 }
 
 // Only these fields are ever returned by the public config endpoint.
@@ -187,4 +228,7 @@ export interface PublicPopupConfig {
   // Legacy redirect target; only present/used for old popups that set it.
   thankYouUrl: string;
   style: PopupStyle;
+  // Minimal public hint that a discount offer is available. Present ONLY when
+  // the popup has an enabled discountOffer. Never exposes value, IDs or caps.
+  discount?: { enabled: true; shopUrl: string };
 }
