@@ -233,7 +233,7 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
     btnBg +
     ";color:#fff;font-size:15px;font-weight:600;text-decoration:none;}#gcpm-root .gcpm-shop:hover{filter:brightness(1.08);}#gcpm-root .gcpm-hp{position:absolute!important;left:-9999px!important;width:1px!important;height:1px!important;overflow:hidden!important;}#gcpm-root .gcpm-switch{display:block;width:100%;margin:0 0 10px;padding:6px 2px;border:0;background:none;color:" +
     btnBg +
-    ";font-family:inherit;font-size:13.5px;font-weight:600;text-decoration:underline;cursor:pointer;text-align:left;}#gcpm-root .gcpm-consent{display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;font-size:12px;line-height:1.4;color:#374151;text-align:left;}#gcpm-root .gcpm-consent input{margin-top:2px;flex:0 0 auto;}#gcpm-root .gcpm-form[data-gcpm-mode=sms] .gcpm-only-email{display:none;}#gcpm-root .gcpm-form[data-gcpm-mode=email] .gcpm-only-sms{display:none;}";
+    ";font-family:inherit;font-size:13.5px;font-weight:600;text-decoration:underline;cursor:pointer;text-align:left;}#gcpm-root .gcpm-consent{display:flex;gap:8px;align-items:flex-start;margin:0 0 10px;font-size:12px;line-height:1.4;color:#374151;text-align:left;}#gcpm-root .gcpm-consent input{margin-top:2px;flex:0 0 auto;}#gcpm-root .gcpm-form[data-gcpm-mode=email] .gcpm-only-sms{display:none;}";
   function inputFor(f: PopupField): string {
     var label = esc(f.label || f.key),
       placeholder = esc(f.placeholder || ""),
@@ -261,7 +261,7 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
           "/>";
   }
   var emailInput =
-    '<input class="gcpm-field gcpm-only-email" type="email" name="email" aria-label="Email" placeholder="Email address" required/>';
+    '<input class="gcpm-field" type="email" name="email" aria-label="Email" placeholder="Email address" required/>';
   var smsForm = cfg.smsForm && cfg.smsForm.enabled ? cfg.smsForm : null;
   var smsMode = smsForm && smsForm.mode === "sms-first" ? "sms-first" : "email-first";
   var leadMode = smsMode === "sms-first" ? "sms" : "email";
