@@ -508,6 +508,7 @@ export function validateDiscountOffer(raw: unknown): DiscountValidation {
       codePrefix,
       combinesWithProduct: boolField(o.combinesWithProduct, true),
       replacesReferrerCode: boolField(o.replacesReferrerCode, false),
+      eligibility: o.eligibility === "anyone" ? "anyone" : "first-order",
       dailyCap: dailyCapRaw,
       shopUrl,
       errorText,

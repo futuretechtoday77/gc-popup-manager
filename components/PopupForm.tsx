@@ -75,6 +75,7 @@ interface DiscountOfferValue {
   codePrefix: string;
   combinesWithProduct: boolean;
   replacesReferrerCode: boolean;
+  eligibility: "first-order" | "anyone";
   dailyCap: string;
   shopUrl: string;
   errorText: string;
@@ -103,6 +104,7 @@ function emptyDiscountOffer(): DiscountOfferValue {
     codePrefix: "GC-",
     combinesWithProduct: true,
     replacesReferrerCode: false,
+    eligibility: "first-order",
     dailyCap: "200",
     shopUrl: "",
     errorText: DEFAULT_DISCOUNT_ERROR_TEXT,
@@ -223,6 +225,8 @@ export function fromPopup(p: Popup): PopupFormValue {
           codePrefix: p.discountOffer.codePrefix,
           combinesWithProduct: p.discountOffer.combinesWithProduct,
           replacesReferrerCode: p.discountOffer.replacesReferrerCode === true,
+          eligibility:
+            p.discountOffer.eligibility === "anyone" ? "anyone" : "first-order",
           dailyCap: String(p.discountOffer.dailyCap),
           shopUrl: p.discountOffer.shopUrl,
           errorText: p.discountOffer.errorText || DEFAULT_DISCOUNT_ERROR_TEXT,
@@ -259,6 +263,7 @@ export function toPayload(v: PopupFormValue): Record<string, unknown> {
     codePrefix: d.codePrefix.trim().toUpperCase(),
     combinesWithProduct: d.combinesWithProduct,
     replacesReferrerCode: d.replacesReferrerCode,
+    eligibility: d.eligibility,
     dailyCap: d.dailyCap.trim() === "" ? 200 : Number(d.dailyCap) || 0,
     shopUrl: d.shopUrl.trim(),
     errorText: d.errorText.trim() || DEFAULT_DISCOUNT_ERROR_TEXT,
@@ -973,6 +978,27 @@ export default function PopupForm({
                     onChange={(e) => setDiscount("errorText", e.target.value)}
                   />
                 </div>
+
+                <label className="block text-sm text-gray-700 pt-1">
+                  Who gets a code
+                  <select
+                    className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    value={v.discountOffer.eligibility}
+                    onChange={(e) =>
+                      setDiscount(
+                        "eligibility",
+                        e.target.value === "anyone" ? "anyone" : "first-order",
+                      )
+                    }
+                  >
+                    <option value="first-order">
+                      First order only (no previous orders on the store)
+                    </option>
+                    <option value="anyone">
+                      Anyone who opts in (one code per email)
+                    </option>
+                  </select>
+                </label>
 
                 <div className="flex flex-wrap gap-6 pt-1">
                   <label className="flex items-center gap-2 text-sm text-gray-700">

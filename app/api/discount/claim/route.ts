@@ -187,8 +187,10 @@ export async function POST(req: NextRequest) {
       return withCors(json({ status: "capped" }));
     }
 
-    // 6. First-order check (fail open).
-    const orders = await countCustomerOrders(email);
+    // 6. First-order check (fail open). Skipped when the offer is open to
+    //    anyone; offers saved before the setting existed default to first-order.
+    const firstOrderOnly = offer.eligibility !== "anyone";
+    const orders = firstOrderOnly ? await countCustomerOrders(email) : 0;
     if (orders === null) {
       console.warn(
         "[discount/claim] first-order check failed/timed out; failing open",

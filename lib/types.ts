@@ -104,6 +104,10 @@ export interface DiscountOffer {
   // referrer cookie and GC "Referrer Code"). Default false: the cart keeps the
   // partner code and says the new code needs its own order.
   replacesReferrerCode: boolean;
+  // Who may claim a code. "first-order" (default, and what every offer saved
+  // before this setting did): only an email with no orders on the store.
+  // "anyone": every opt-in gets a code (still one per email per offer).
+  eligibility: DiscountEligibility;
   dailyCap: number; // max codes per offer per UTC day, default 200; 0 = paused
   shopUrl: string; // brand site URL for the "Shop now" button
   // Shown in the thank-you step when no code could be issued (Shopify failure,
@@ -115,6 +119,9 @@ export interface DiscountOffer {
 // both forms: Global Control identifies every contact by email, so a phone-only
 // opt-in could never be synced or texted through GC.
 export type SmsFormMode = "email-first" | "sms-first";
+
+export type DiscountEligibility = "first-order" | "anyone";
+export const DISCOUNT_ELIGIBILITY_DEFAULT: DiscountEligibility = "first-order";
 export interface SmsFormSettings {
   enabled: boolean;
   mode: SmsFormMode;
