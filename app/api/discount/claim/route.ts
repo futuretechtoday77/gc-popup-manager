@@ -48,16 +48,20 @@ function clientIp(req: NextRequest): string {
 // Append ?code= so the mini-store cart can read it.
 // When the offer may replace a podcast/partner code, add `code_replace=1` so
 // the mini-store cart lets this code win instead of protecting the partner code.
+// `gcpm=1` marks this as OUR code rather than a partner referral, so the
+// mini-store cart does not record a voucher in the visitor's 90-day referrer
+// cookie (which Global Control then stores as their Referrer Code).
 function appendCode(shopUrl: string, code: string, replace = false): string {
   try {
     const u = new URL(shopUrl);
     u.searchParams.set("code", code);
+    u.searchParams.set("gcpm", "1");
     if (replace) u.searchParams.set("code_replace", "1");
     return u.toString();
   } catch {
     const sep = shopUrl.includes("?") ? "&" : "?";
     return (
-      `${shopUrl}${sep}code=${encodeURIComponent(code)}` +
+      `${shopUrl}${sep}code=${encodeURIComponent(code)}&gcpm=1` +
       (replace ? "&code_replace=1" : "")
     );
   }
