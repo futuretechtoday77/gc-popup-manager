@@ -53,6 +53,22 @@ const SCRIPT = String.raw`(function () {
 
     var shownKey = "gc_popup_shown_" + popupId;
     var dismissKey = "gc_popup_dismissed_" + popupId;
+    // Once a visitor has claimed this popup's discount code, stop showing it on
+    // this browser for 90 days, across tabs and visits (sessionStorage alone
+    // forgets on every new tab). Only discount popups ever set this.
+    var optinKey = "gc_popup_claimed_" + popupId;
+    var OPTIN_MS = 90 * 24 * 60 * 60 * 1000;
+    function claimedHere() {
+      try {
+        var until = Number(window.localStorage.getItem(optinKey) || 0);
+        if (!until) return false;
+        if (Date.now() > until) { window.localStorage.removeItem(optinKey); return false; }
+        return true;
+      } catch (e) { return false; }
+    }
+    function markClaimed() {
+      try { window.localStorage.setItem(optinKey, String(Date.now() + OPTIN_MS)); } catch (e) {}
+    }
     var state = { open: false, cfg: null, submitting: false, root: null, style: null, scheduled: false };
     var token = safeId(popupId);
 
@@ -278,6 +294,7 @@ const SCRIPT = String.raw`(function () {
             var status = cdata && cdata.status;
             var code = cdata && cdata.code;
             if (!cerr && (status === "issued" || status === "existing") && code) {
+              markClaimed();
               if (target) {
                 target.innerHTML = successHtml(
                   hasSuccessText ? successText : "Thanks! Your submission was received.",
@@ -297,7 +314,7 @@ const SCRIPT = String.raw`(function () {
 
     function launch(force) {
       if (state.open) return;
-      if (!force && (ss(dismissKey) || ss(shownKey))) return;
+      if (!force && (ss(dismissKey) || ss(shownKey) || claimedHere())) return;
       function go(cfg) {
         state.cfg = cfg;
         ssSet(shownKey, "1");
