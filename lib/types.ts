@@ -272,6 +272,7 @@ export interface PublicPopupConfig {
   };
   // Present ONLY when the popup enables the switchable SMS form. Labels only.
   smsForm?: {
+    enabled: true;
     mode: SmsFormMode;
     switchLabel: string;
     backLabel: string;

@@ -251,6 +251,7 @@ export function toPublicConfig(popup: Popup): PublicPopupConfig {
     ...(popup.smsForm?.enabled
       ? {
           smsForm: {
+            enabled: true as const,
             mode: popup.smsForm.mode,
             switchLabel: popup.smsForm.switchLabel,
             backLabel: popup.smsForm.backLabel,
