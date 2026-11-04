@@ -298,7 +298,7 @@ export function buildPopup(cfg: RenderConfig): { css: string; html: string } {
   // A bot that fills this hidden field never gets submitted; the visitor sees
   // the normal thank-you either way, so a bot learns nothing.
   var honeypot =
-    '<div class="gcpm-hp" aria-hidden="true"><label>Company<input type="text" name="company" tabindex="-1" autocomplete="off"/></label></div>';
+    '<div class="gcpm-hp" aria-hidden="true"><input type="text" name="gcpm_hp" tabindex="-1" autocomplete="new-password" data-lpignore="true" data-1p-ignore="true" data-form-type="other" aria-label="Leave this field empty"/></div>';
   var content =
     (cfg.headline
       ? '<h2 class="gcpm-headline">' + esc(cfg.headline) + "</h2>"

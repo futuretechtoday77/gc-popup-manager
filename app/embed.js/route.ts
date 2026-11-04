@@ -206,7 +206,7 @@ const SCRIPT = String.raw`(function () {
 
         // Bot trap: a real visitor never fills this hidden field. Show the
         // normal thank-you so nothing is learned, and send nothing.
-        var hp = form.querySelector("[name=company]");
+        var hp = form.querySelector("[name=gcpm_hp]");
         if (hp && String(hp.value || "").trim()) {
           var trapTarget = body || root.querySelector(".gcpm-split-form") || root.querySelector(".gcpm-card");
           if (trapTarget) trapTarget.innerHTML = successHtml("Thanks! Your submission was received.");
@@ -224,7 +224,7 @@ const SCRIPT = String.raw`(function () {
         var missing = false;
         for (var i = 0; i < inputs.length; i++) {
           var inp = inputs[i];
-          if (inp.name === "company") continue;
+          if (inp.name === "gcpm_hp") continue;
           if (inp.type === "checkbox") {
             if (inp.name === "smsConsent" && mode === "sms") {
               payload[inp.name] = inp.checked ? "yes" : "";
